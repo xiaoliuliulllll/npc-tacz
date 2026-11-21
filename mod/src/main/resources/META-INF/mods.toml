@@ -1,0 +1,28 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="GPL-3.0-or-later"
+[[mods]]
+modId="npc_tacz"
+version="1.0.0"
+displayName="npc-tacz"
+description='''npc-tacz: independent Soldier, Bandit, Rebel, Bounty Hunter and Mercenary NPCs with TACZ weapons.'''
+authors="npc-tacz contributors"
+[[dependencies.npc_tacz]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.npc_tacz]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.npc_tacz]]
+modId="tacz"
+mandatory=true
+versionRange="[1.1.0,)"
+ordering="AFTER"
+side="BOTH"
+

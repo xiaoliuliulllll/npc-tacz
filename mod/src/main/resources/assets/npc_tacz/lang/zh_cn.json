@@ -1,0 +1,8 @@
+{
+  "entity.npc_tacz.soldier": "士兵",
+  "entity.npc_tacz.bandit": "劫匪",
+  "entity.npc_tacz.rebel": "叛军",
+  "entity.npc_tacz.bounty_hunter": "赏金猎人",
+  "entity.npc_tacz.mercenary": "雇佣兵",
+  "key.npctacz.admin": "打开 NPC 全局设置（Alt+N）"
+}

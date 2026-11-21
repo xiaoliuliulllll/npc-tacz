@@ -1,0 +1,25 @@
+# build / gradle
+build/
+.gradle/
+run/
+run-*/
+logs/
+*.log
+
+# local compile-only dependency: never commit TACZ jar or any built jar
+*.jar
+!mod/libs/README.txt
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# release artifacts
+dist/
+*.zip

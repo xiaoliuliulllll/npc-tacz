@@ -1,0 +1,8 @@
+{
+  "entity.npc_tacz.soldier": "Soldier",
+  "entity.npc_tacz.bandit": "Bandit",
+  "entity.npc_tacz.rebel": "Rebel",
+  "entity.npc_tacz.bounty_hunter": "Bounty Hunter",
+  "entity.npc_tacz.mercenary": "Mercenary",
+  "key.npctacz.admin": "Open NPC Admin Panel (Alt+N)"
+}
