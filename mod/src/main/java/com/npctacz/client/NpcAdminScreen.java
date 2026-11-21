@@ -44,6 +44,8 @@ public final class NpcAdminScreen extends Screen {
     private EditBox ammoBox;
     private EditBox maxNpcBox;
     private EditBox allIntervalBox;
+    private EditBox spawnOuterBox;
+    private EditBox spawnInnerBox;
     private final List<EditBox> amountMinBoxes = new ArrayList<>();
     private final List<EditBox> amountMaxBoxes = new ArrayList<>();
     private final List<EditBox> intervalBoxes = new ArrayList<>();
@@ -83,6 +85,8 @@ public final class NpcAdminScreen extends Screen {
         this.ammoBox = null;
         this.maxNpcBox = null;
         this.allIntervalBox = null;
+        this.spawnOuterBox = null;
+        this.spawnInnerBox = null;
         this.panelW = Math.max(240, Math.min(540, this.width - 8));
         this.panelX = (this.width - this.panelW) / 2;
         this.panelY = 4;
@@ -191,6 +195,27 @@ public final class NpcAdminScreen extends Screen {
             NpcNetwork.sendAdminUpdate("spawn_interval_all", 0, seconds * 20.0D, 0.0D);
         }).bounds(this.contentX + 134, allY, 70, 16).build()).active = this.canEdit;
         this.drawHint(allY + 22, "阵营名点击切换是否自然生成");
+
+        int rangeY = allY + 42;
+        double outer = this.snapshot.outerRadii.length > 0 ? this.snapshot.outerRadii[0] : 96.0D;
+        double inner = this.snapshot.innerRadii.length > 0 ? this.snapshot.innerRadii[0] : 48.0D;
+        this.drawLabel(this.contentX, rangeY + 5, "外");
+        this.spawnOuterBox = this.createNumberBox(this.contentX + 14, rangeY, 50, 16,
+            String.valueOf(Math.round(outer)), false);
+        this.addRenderableWidget(this.spawnOuterBox);
+        this.drawLabel(this.contentX + 70, rangeY + 5, "内");
+        this.spawnInnerBox = this.createNumberBox(this.contentX + 84, rangeY, 50, 16,
+            String.valueOf(Math.round(inner)), false);
+        this.addRenderableWidget(this.spawnInnerBox);
+        this.addRenderableWidget(Button.builder(Component.literal("应用距离"), button -> {
+            long outerValue = parseLong(this.spawnOuterBox.getValue(), 96L);
+            long innerValue = parseLong(this.spawnInnerBox.getValue(), 48L);
+            outerValue = Math.max(16L, Math.min(4096L, outerValue));
+            innerValue = Math.max(16L, Math.min(outerValue, innerValue));
+            NpcNetwork.sendAdminUpdate("spawn_range_all", 0,
+                (double) outerValue, (double) innerValue);
+        }).bounds(this.contentX + 140, rangeY, Math.max(56, this.contentW - 140), 16).build()).active = this.canEdit;
+        this.drawHint(rangeY + 20, "玩家外/玩家内距离 16-4096，内不能大于外");
     }
 
     private void buildWorldPage() {

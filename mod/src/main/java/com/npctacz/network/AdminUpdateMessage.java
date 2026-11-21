@@ -168,6 +168,13 @@ public final class AdminUpdateMessage {
                         spawn.setInterval(faction, ticks);
                     }
                 }
+                case "spawn_range_all" -> {
+                    double outer = Math.max(16.0D, Math.min(4096.0D, this.valueA));
+                    double inner = Math.max(16.0D, Math.min(outer, this.valueB));
+                    for (NpcFaction faction : factions) {
+                        spawn.setRange(faction, outer, inner);
+                    }
+                }
                 default -> {
                     return;
                 }

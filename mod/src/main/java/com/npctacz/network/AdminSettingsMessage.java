@@ -49,6 +49,8 @@ public final class AdminSettingsMessage {
     public final long[] intervals;
     public final int[] amountMin;
     public final int[] amountMax;
+    public final double[] innerRadii;
+    public final double[] outerRadii;
 
     public AdminSettingsMessage(int difficulty, boolean canEdit,
                                 double damageMultiplier, double fireRateMultiplier,
@@ -64,7 +66,8 @@ public final class AdminSettingsMessage {
                                 boolean dropGuns, boolean dropAmmo, double ammoDropMultiplier,
                                 int maxNpcs, int currentNpcs, boolean spawnEnabled, boolean generatePrompt,
                                 boolean[] spawnFactionEnabled,
-                                long[] intervals, int[] amountMin, int[] amountMax) {
+                                long[] intervals, int[] amountMin, int[] amountMax,
+                                double[] innerRadii, double[] outerRadii) {
         this.difficulty = difficulty;
         this.canEdit = canEdit;
         this.damageMultiplier = damageMultiplier;
@@ -96,6 +99,8 @@ public final class AdminSettingsMessage {
         this.intervals = intervals;
         this.amountMin = amountMin;
         this.amountMax = amountMax;
+        this.innerRadii = innerRadii;
+        this.outerRadii = outerRadii;
     }
 
     public static AdminSettingsMessage snapshot(ServerPlayer player) {
@@ -106,6 +111,8 @@ public final class AdminSettingsMessage {
         int[] mins = new int[n];
         int[] maxs = new int[n];
         boolean[] enabled = new boolean[n];
+        double[] innerRadii = new double[n];
+        double[] outerRadii = new double[n];
         double[] factionHealth = new double[n];
         double[] factionDamage = new double[n];
         double[] factionRange = new double[n];
@@ -120,6 +127,8 @@ public final class AdminSettingsMessage {
             mins[i] = rule.amountMin;
             maxs[i] = rule.amountMax;
             enabled[i] = rule.enabled;
+            innerRadii[i] = rule.innerRadius;
+            outerRadii[i] = rule.outerRadius;
         }
         return new AdminSettingsMessage(
             difficulty.getDifficulty(),
@@ -146,7 +155,7 @@ public final class AdminSettingsMessage {
             com.npctacz.event.NpcSpawnEvents.countAllNpcs(player.getServer()),
             difficulty.isSpawnEnabled(),
             difficulty.isGeneratePrompt(),
-            enabled, intervals, mins, maxs
+            enabled, intervals, mins, maxs, innerRadii, outerRadii
         );
     }
 
@@ -194,6 +203,8 @@ public final class AdminSettingsMessage {
             buffer.writeLong(message.intervals.length > i ? message.intervals[i] : 0L);
             buffer.writeVarInt(message.amountMin.length > i ? message.amountMin[i] : 0);
             buffer.writeVarInt(message.amountMax.length > i ? message.amountMax[i] : 0);
+            buffer.writeDouble(message.innerRadii.length > i ? message.innerRadii[i] : 48.0D);
+            buffer.writeDouble(message.outerRadii.length > i ? message.outerRadii[i] : 96.0D);
         }
     }
 
@@ -242,10 +253,14 @@ public final class AdminSettingsMessage {
         int[] mins = new int[n];
         int[] maxs = new int[n];
         boolean[] enabled = new boolean[n];
+        double[] innerRadii = new double[n];
+        double[] outerRadii = new double[n];
         for (int i = 0; i < n; i++) {
             intervals[i] = buffer.readLong();
             mins[i] = buffer.readVarInt();
             maxs[i] = buffer.readVarInt();
+            innerRadii[i] = buffer.readDouble();
+            outerRadii[i] = buffer.readDouble();
         }
         return new AdminSettingsMessage(difficulty, canEdit, damage, fire, reaction,
             healthMultiplier, movementSpeedMultiplier, soldierHostilePlayers, viewDistance,
@@ -253,7 +268,8 @@ public final class AdminSettingsMessage {
             npcCullEnabled, npcCullDistance, chatNotifications, playerHeadshotBonus,
             spreadMultiplier, rangeMultiplier, factionRangeMultipliers, factionSpreadMultipliers,
             dropGuns, dropAmmo, ammoMultiplier, maxNpcs, currentNpcs,
-            spawnEnabled, generatePrompt, spawnFactionEnabled, intervals, mins, maxs);
+            spawnEnabled, generatePrompt, spawnFactionEnabled, intervals, mins, maxs,
+            innerRadii, outerRadii);
     }
 
     public void handle(Supplier<NetworkEvent.Context> supplier) {

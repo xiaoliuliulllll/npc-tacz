@@ -105,8 +105,8 @@ public final class NpcSpawnConfigData extends SavedData {
 
     public void setRange(NpcFaction faction, double outer, double inner) {
         Rule rule = rule(faction);
-        rule.outerRadius = Math.max(16.0D, Math.min(1024.0D, outer));
-        rule.innerRadius = Math.max(16.0D, Math.min(rule.outerRadius - 1.0D, inner));
+        rule.outerRadius = Math.max(16.0D, Math.min(4096.0D, outer));
+        rule.innerRadius = Math.max(16.0D, Math.min(rule.outerRadius, inner));
         this.setDirty();
     }
 
