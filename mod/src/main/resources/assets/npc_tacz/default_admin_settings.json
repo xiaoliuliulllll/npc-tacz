@@ -1,0 +1,54 @@
+{
+  "damage": 1.0,
+  "firerate": 1.0,
+  "reaction": 1.0,
+  "health": 1.0,
+  "movespeed": 1.0,
+  "difficulty": 4,
+  "maxNpcs": 200,
+  "dropGuns": true,
+  "dropAmmo": true,
+  "ammoMultiplier": 1.0,
+  "spawnEnabled": true,
+  "generatePrompt": true,
+  "soldierHostile": true,
+  "meleeTaken": 1.5,
+  "playerHeadshotBonus": 6.5,
+  "spreadMultiplier": 1.0,
+  "rangeMultiplier": 1.0,
+  "factionHealth": {
+    "SOLDIER": 1.0,
+    "BANDIT": 1.0,
+    "REBEL": 1.0,
+    "BOUNTY_HUNTER": 1.0,
+    "MERCENARY": 1.0
+  },
+  "factionDamage": {
+    "SOLDIER": 1.0,
+    "BANDIT": 1.0,
+    "REBEL": 1.0,
+    "BOUNTY_HUNTER": 1.0,
+    "MERCENARY": 1.0
+  },
+  "factionRange": {
+    "SOLDIER": 1.0,
+    "BANDIT": 1.0,
+    "REBEL": 1.0,
+    "BOUNTY_HUNTER": 1.0,
+    "MERCENARY": 1.0
+  },
+  "factionSpread": {
+    "SOLDIER": 1.0,
+    "BANDIT": 1.0,
+    "REBEL": 1.0,
+    "BOUNTY_HUNTER": 1.0,
+    "MERCENARY": 1.0
+  },
+  "factions": {
+    "SOLDIER": {"min": 6, "max": 10, "interval": 1200, "enabled": true},
+    "BANDIT": {"min": 4, "max": 6, "interval": 1200, "enabled": true},
+    "REBEL": {"min": 2, "max": 3, "interval": 1200, "enabled": true},
+    "BOUNTY_HUNTER": {"min": 1, "max": 1, "interval": 12000, "enabled": true},
+    "MERCENARY": {"min": 1, "max": 1, "interval": 7200, "enabled": true}
+  }
+}
