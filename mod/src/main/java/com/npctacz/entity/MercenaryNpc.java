@@ -94,6 +94,14 @@ public class MercenaryNpc extends SoldierNpc {
     }
 
     @Override
+    public boolean canRetaliateAgainst(LivingEntity attacker) {
+        if (attacker instanceof Player player && this.isOwner(player)) {
+            return false;
+        }
+        return super.canRetaliateAgainst(attacker);
+    }
+
+    @Override
     public int getInitialAmmo() {
         return INFINITE_AMMO;
     }

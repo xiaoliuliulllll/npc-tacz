@@ -37,7 +37,8 @@ public class NpcTargetGoal extends TargetGoal {
                 this.targetMob = forced;
                 this.npc.setTarget(forced);
             }
-            return false;
+            // 继续走视线/距离校验，避免被反击目标重新变成永久穿墙锁定。
+            return keepCurrentTarget();
         }
         if (this.npc.isWeakRunning() && this.npc.getTarget() == null) {
             return false;
@@ -88,7 +89,9 @@ public class NpcTargetGoal extends TargetGoal {
             return true;
         }
         LivingEntity target = this.npc.getTarget();
-        if (target == null || !target.isAlive() || !this.npc.isHostileTo(target)) {
+        boolean forcedTarget = forced != null && target == forced;
+        if (target == null || !target.isAlive()
+            || (!forcedTarget && !this.npc.isHostileTo(target))) {
             if (target != null) {
                 this.npc.setTarget(null);
             }
@@ -103,6 +106,9 @@ public class NpcTargetGoal extends TargetGoal {
             boolean visible = NpcCombatHelper.canSee(this.npc, target);
             this.npc.noteTargetVisibility(visible);
             if (!visible && this.npc.getTargetLosLostTicks() >= 10) {
+                if (forcedTarget) {
+                    this.npc.clearRetaliation();
+                }
                 this.npc.setTarget(null);
                 return false;
             }

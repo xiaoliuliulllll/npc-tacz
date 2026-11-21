@@ -869,6 +869,27 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
         return super.doHurtTarget(target);
     }
 
+    /**
+     * 被攻击时的反击资格：即使平时不主动打敌对生物，被僵尸/骷髅攻击也会自卫；
+     * 同阵营、创造/旁观、主人等仍然排除。
+     */
+    public boolean canRetaliateAgainst(LivingEntity attacker) {
+        if (attacker == null || attacker == this || !attacker.isAlive()) {
+            return false;
+        }
+        if (attacker instanceof Player player) {
+            if ((!allowsCreativePlayers() && player.isCreative())
+                || (!allowsSpectatorPlayers() && player.isSpectator())) {
+                return false;
+            }
+            return this.isWithinPlayerViewDistance(player);
+        }
+        if (attacker instanceof WastelandNpcEntity npc) {
+            return this.getFaction().isHostileTo(npc.getFaction());
+        }
+        return attacker instanceof Enemy;
+    }
+
     public boolean isHostileTo(LivingEntity other) {
         if (other == this || !other.isAlive()) {
             return false;
@@ -976,10 +997,16 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
     public LivingEntity getForcedTarget() {
         if (this.retaliationTicks > 0 && this.retaliationTarget != null
             && this.retaliationTarget.isAlive()
-            && this.isHostileTo(this.retaliationTarget)) {
+            && this.canRetaliateAgainst(this.retaliationTarget)) {
             return this.retaliationTarget;
         }
         return null;
+    }
+
+    /** 目标隔墙丢失时清掉强制反击，避免目标被清空后又被 getForcedTarget 立刻拉回来。 */
+    public void clearRetaliation() {
+        this.retaliationTarget = null;
+        this.retaliationTicks = 0;
     }
 
     private void tickRetaliation() {
@@ -989,7 +1016,7 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
         if (this.retaliationTarget != null
             && (!this.retaliationTarget.isAlive()
                 || this.retaliationTicks <= 0
-                || !this.isHostileTo(this.retaliationTarget))) {
+                || !this.canRetaliateAgainst(this.retaliationTarget))) {
             this.retaliationTarget = null;
             this.retaliationTicks = 0;
         }
@@ -1037,7 +1064,7 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
             Entity attackerEntity = source.getEntity();
             if (attackerEntity instanceof LivingEntity attacker
                 && attacker != this
-                && this.isHostileTo(attacker)) {
+                && this.canRetaliateAgainst(attacker)) {
                 // 先手敌人已经锁定时不换目标；目标死了/超时后新的攻击者才会接管
                 boolean keepFirst = this.retaliationTarget != null
                     && this.retaliationTarget.isAlive()
