@@ -286,6 +286,14 @@ public final class NpcAmmoState {
                 * (float) com.npctacz.config.NpcGlobalConfig.getDouble(
                     "accuracy_multiplier", NpcConfig.VALUES.accuracyMultiplier.get())
                 * (float) spreadMultiplier;
+            int difficulty = this.npc.getNpcDifficulty();
+            if (difficulty >= 4) {
+                spread *= (float) com.npctacz.config.NpcGlobalConfig.getDouble(
+                    "difficulty4_spread_multiplier", 0.65D);
+            } else if (difficulty == 3) {
+                spread *= (float) com.npctacz.config.NpcGlobalConfig.getDouble(
+                    "difficulty3_spread_multiplier", 0.8D);
+            }
             float jitterYaw = baseYaw + (this.npc.getRandom().nextFloat() * 2.0F - 1.0F) * spread * 0.5F;
             float jitterPitch = Mth.clamp(
                 basePitch + (this.npc.getRandom().nextFloat() * 2.0F - 1.0F) * spread * 0.5F,

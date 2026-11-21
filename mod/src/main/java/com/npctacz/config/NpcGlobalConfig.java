@@ -340,6 +340,14 @@ npc_turn_delay_max : 16
 // 中文：是否给 NPC 生成随机姓名（默认 false，保持原本的 NPC 名）
 npc_random_names : false
 
+// 代码：difficulty3_spread_multiplier
+// 中文：难度3的散布倍率（越小越准，默认 0.8）
+difficulty3_spread_multiplier : 0.8
+
+// 代码：difficulty4_spread_multiplier
+// 中文：难度4的散布倍率（越小越准，默认 0.65）
+difficulty4_spread_multiplier : 0.65
+
 // 代码：npc_name_tags
 // 中文：NPC 是否显示随机姓名/阵营名条
 npc_name_tags : true
