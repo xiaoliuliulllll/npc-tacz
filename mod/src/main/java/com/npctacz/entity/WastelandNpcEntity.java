@@ -891,7 +891,10 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
         if (other instanceof WastelandNpcEntity npc) {
             return getFaction().isHostileTo(npc.getFaction());
         }
-        return other instanceof Enemy;
+        if (other instanceof Enemy) {
+            return com.npctacz.config.NpcGlobalConfig.getBoolean("attack_hostile_mobs", false);
+        }
+        return false;
     }
 
     /** 记录当前目标是否还能看见；目标隔墙超过 20 tick 会由 NpcTargetGoal 丢弃。 */
@@ -923,6 +926,10 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
 
     @Override
     public void setTarget(@Nullable LivingEntity target) {
+        if (target != null && target != this.getTarget()
+            && !this.isHostileTo(target) && target != this.retaliationTarget) {
+            return;
+        }
         if (target != null && target != this.getTarget()) {
             if (!this.isTargetInFrontArc(target, 75.0F)
                 && !this.isLoudTarget(target)

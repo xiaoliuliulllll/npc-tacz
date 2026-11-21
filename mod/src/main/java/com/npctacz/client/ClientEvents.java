@@ -57,12 +57,6 @@ public final class ClientEvents {
 
         public NpcRenderer(EntityRendererProvider.Context context) {
             super(context, new PlayerModel<>(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
-            this.addLayer(new LodArmorLayer(
-                context,
-                this,
-                context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR),
-                context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)
-            ));
             this.shadowRadius = 0.3F;
             this.shadowStrength = 0.6F;
         }

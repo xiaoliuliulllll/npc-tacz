@@ -352,6 +352,10 @@ difficulty4_spread_multiplier : 0.65
 // 中文：NPC 是否显示随机姓名/阵营名条
 npc_name_tags : true
 
+// 代码：attack_hostile_mobs
+// 中文：NPC 是否主动攻击僵尸/骷髅等敌对生物（默认 false）
+attack_hostile_mobs : false
+
 // 代码：npc_voice
 // 中文：NPC 受击/死亡是否播放人声
 npc_voice : true
