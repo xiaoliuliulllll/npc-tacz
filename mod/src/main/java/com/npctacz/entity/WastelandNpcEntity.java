@@ -147,6 +147,8 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
     private int lastCalloutTick = -1000;
     /** 切换新目标后的转身硬直结束 tick。 */
     private int turnReadyTick;
+    /** 当前目标连续失去视线的 tick 数；超过阈值就丢目标，防止隔墙锁人。 */
+    private int targetLosLostTicks;
     private int cachedNpcDifficulty = 2;
     private long cachedDifficultyReadTick = Long.MIN_VALUE;
     private double cachedRangeMultiplier = 1.0D;
@@ -892,6 +894,19 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
         return other instanceof Enemy;
     }
 
+    /** 记录当前目标是否还能看见；目标隔墙超过 20 tick 会由 NpcTargetGoal 丢弃。 */
+    public void noteTargetVisibility(boolean visible) {
+        if (visible) {
+            this.targetLosLostTicks = 0;
+        } else {
+            this.targetLosLostTicks++;
+        }
+    }
+
+    public int getTargetLosLostTicks() {
+        return this.targetLosLostTicks;
+    }
+
     /** 玩家自己的 NPC 可见/受击距离；超过后 NPC 不把该玩家当目标。 */
     public boolean isWithinPlayerViewDistance(LivingEntity target) {
         if (!(target instanceof Player player)
@@ -908,11 +923,16 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
 
     @Override
     public void setTarget(@Nullable LivingEntity target) {
-        if (target != null && target != this.getTarget()
-            && !this.isTargetInFrontArc(target, 75.0F)
-            && !this.isLoudTarget(target)
-            && target != this.retaliationTarget) {
-            return;
+        if (target != null && target != this.getTarget()) {
+            if (!this.isTargetInFrontArc(target, 75.0F)
+                && !this.isLoudTarget(target)
+                && target != this.retaliationTarget) {
+                return;
+            }
+            // 新目标必须真实可见，不能从墙后/队友共享目标里隔墙锁定。
+            if (!com.npctacz.entity.ai.NpcCombatHelper.canSee(this, target)) {
+                return;
+            }
         }
         if (target instanceof Player player) {
             if ((!allowsCreativePlayers() && player.isCreative())
@@ -1549,7 +1569,8 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
      */
     private void alertAllies(LivingEntity attacker) {
         if (this.level().isClientSide || attacker == null || attacker == this
-            || !attacker.isAlive() || !this.isHostileTo(attacker)) {
+            || !attacker.isAlive() || !this.isHostileTo(attacker)
+            || !com.npctacz.entity.ai.NpcCombatHelper.canSee(this, attacker)) {
             return;
         }
         int cooldown = Math.max(20, com.npctacz.config.NpcGlobalConfig.getInt("ally_alert_cooldown", 100));

@@ -99,6 +99,14 @@ public class NpcTargetGoal extends TargetGoal {
             this.npc.setTarget(null);
             return false;
         }
+        if (this.npc.tickCount % 10 == 0) {
+            boolean visible = NpcCombatHelper.canSee(this.npc, target);
+            this.npc.noteTargetVisibility(visible);
+            if (!visible && this.npc.getTargetLosLostTicks() >= 10) {
+                this.npc.setTarget(null);
+                return false;
+            }
+        }
         return true;
     }
 
