@@ -33,7 +33,7 @@ gradle build
 输出：
 
 ```text
-mod/build/libs/npc-tacz-1.0.0.jar
+mod/build/libs/npc-tacz-1.1.1.jar
 ```
 
 ## 3. 本地运行（可选）

@@ -4,7 +4,7 @@ An independently developed Minecraft 1.20.1 Forge NPC mod that uses **TACZ (Time
 
 **This is not an official TACZ project.** The main mod does not bundle TACZ code, models, textures, sounds, or gun pack data.
 
-[中文说明](README.md)
+[中文说明](README.md) | [CurseForge](https://www.curseforge.com/minecraft/mc-mods/npc-tacz)
 
 ## Requirements
 
@@ -17,8 +17,15 @@ An independently developed Minecraft 1.20.1 Forge NPC mod that uses **TACZ (Time
 
 - Five NPC types: Soldier, Bandit, Rebel, Mercenary, Bounty Hunter
 - TACZ guns, attachments, reloading, ballistics, tracers and recoil
-- Faction hostility, reinforcements, cover, target priority and a front 150° vision cone
-- Alt+N admin screen: damage, fire rate, health, speed, reaction, drops, spawning, faction multipliers, spread and range
+- Faction hostility, nearest-target selection, armed-player priority and instant retaliation
+- Threat retreat, cover, ally regrouping and backup calls when outnumbered
+- Random lost-sight tactics: suppression / hold / push
+- Creeper avoidance, melee finishers and retreat-fire accuracy penalty
+- Alt+N 8-page admin screen with quick switches, fixed page tabs and autosave
+- Four damage multipliers, NPC glow toggle and glass/leaf occlusion toggle
+- Loot barrels with configurable lifetime, gun-type extra ammo and sniper 48-round cap
+- Diamond ammo box drops with one-click / inventory-drag matching ammo deposit
+- Xaero minimap radar icons for NPCs (blue dots)
 - 9-slot pickup inventory, death drops, headshot bonus damage, stationary shooting, sniper downtime
 - Long-range visibility, NPC culling, chat notification toggle, item cleanup and nearby ammo refill
 
@@ -42,7 +49,7 @@ An independently developed Minecraft 1.20.1 Forge NPC mod that uses **TACZ (Time
 Output:
 
 ```text
-mod/build/libs/npc-tacz-1.0.0.jar
+mod/build/libs/npc-tacz-1.1.4.jar
 ```
 
 See [BUILDING.md](BUILDING.md) for details.

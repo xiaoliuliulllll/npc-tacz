@@ -59,14 +59,14 @@ mod/gradle.properties
 - [ ] `mod/*.jar` 构建产物加进 `.gitignore`（本清单配套已加）
 - [ ] README 里的 `E:\...` 绝对路径改成相对路径/通用说明
 - [ ] 给出从源码构建的步骤；TACZ jar 由使用者自己放入 `mod/libs/`（只作编译依赖）
-- [ ] 发布 tag（如 `v1.0.0`）和源码 zip，满足 GPL 的 Corresponding Source
+- [ ] 发布 tag（如 `v1.1.1`）和源码 zip，满足 GPL 的 Corresponding Source
 - [ ] README/项目描述写明：**GPL-3.0-or-later**、源码地址、TACZ 是必需前置
 
 ## 三、CurseForge
 
 - 项目类型：Minecraft Mods
 - 游戏版本：1.20.1；加载器：Forge
-- 上传文件：**只传 `npc-tacz-1.0.0.jar`**
+- 上传文件：**只传 `npc-tacz-1.1.1.jar`**
 - 许可证：GPL-3.0-or-later
 - 依赖关系：添加 **TACZ（Timeless and Classics Guns: Zero）为 Required Dependency**
 - Source/Issue 链接填 GitHub/Gitee
