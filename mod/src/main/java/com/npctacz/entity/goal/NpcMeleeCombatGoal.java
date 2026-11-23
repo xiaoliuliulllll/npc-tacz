@@ -5,6 +5,8 @@ import com.npctacz.entity.ai.NpcReactionTime;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
 
@@ -26,6 +28,10 @@ public class NpcMeleeCombatGoal extends Goal {
     private int reactionTicks;
     @javax.annotation.Nullable
     private LivingEntity reactionTarget;
+    private int threatCooldown;
+    private int retreatTicks;
+    @javax.annotation.Nullable
+    private Vec3 retreatPoint;
 
     public NpcMeleeCombatGoal(WastelandNpcEntity npc) {
         this.npc = npc;
@@ -52,6 +58,9 @@ public class NpcMeleeCombatGoal extends Goal {
         this.attackCooldown = 0;
         this.jumpCooldown = 0;
         this.reactionTarget = null;
+        this.threatCooldown = 0;
+        this.retreatTicks = 0;
+        this.retreatPoint = null;
         LivingEntity startTarget = this.npc.getTarget();
         if (startTarget != null) {
             this.reactionTarget = startTarget;
@@ -74,6 +83,19 @@ public class NpcMeleeCombatGoal extends Goal {
             return;
         }
         this.npc.getLookControl().setLookAt(target, 30.0F, 30.0F);
+        if (this.retreatTicks > 0) {
+            this.retreatTicks--;
+            this.handleRetreat(target);
+            return;
+        }
+        if (this.threatCooldown-- <= 0) {
+            this.threatCooldown = 20 + (this.npc.getId() & 15);
+            this.assessThreat(target);
+            if (this.retreatTicks > 0) {
+                this.handleRetreat(target);
+                return;
+            }
+        }
         if (this.attackCooldown > 0) {
             this.attackCooldown--;
         }
@@ -110,6 +132,57 @@ public class NpcMeleeCombatGoal extends Goal {
         if (this.jumpCooldown <= 0 && (this.npc.horizontalCollision || this.npc.isInWater())) {
             this.jumpCooldown = 20;
             this.npc.getJumpControl().jump();
+        }
+    }
+
+    /** 被多人围住/低血时后撤找掩体，避免一个人冲进人海送死。 */
+    private void assessThreat(LivingEntity target) {
+        if (this.npc.level().isClientSide || target == null) {
+            return;
+        }
+        AABB box = this.npc.getBoundingBox().inflate(16.0D, 8.0D, 16.0D);
+        java.util.List<LivingEntity> enemies = this.npc.level().getEntitiesOfClass(
+            LivingEntity.class, box,
+            entity -> entity != this.npc && entity.isAlive() && this.npc.isHostileTo(entity));
+        if (enemies.size() < 2) {
+            return;
+        }
+        LivingEntity nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+        for (LivingEntity enemy : enemies) {
+            double distance = this.npc.distanceToSqr(enemy);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearest = enemy;
+            }
+        }
+        if (nearest == null) {
+            return;
+        }
+        double healthRatio = this.npc.getHealth() / Math.max(1.0F, this.npc.getMaxHealth());
+        if (healthRatio > 0.45D) {
+            return;
+        }
+        Vec3 point = com.npctacz.entity.ai.NpcCombatHelper.findCoverPoint(this.npc, nearest, 8);
+        if (point == null) {
+            point = com.npctacz.entity.ai.NpcCombatHelper.retreatPoint(this.npc, nearest, 7.0D);
+        }
+        this.retreatPoint = point;
+        this.retreatTicks = 40 + this.npc.getRandom().nextInt(31);
+        this.npc.callBackup(nearest);
+    }
+
+    private void handleRetreat(LivingEntity target) {
+        this.npc.getLookControl().setLookAt(target.getX(), target.getEyeY(), target.getZ(), 30.0F, 30.0F);
+        Vec3 point = this.retreatPoint;
+        if (point == null) {
+            point = com.npctacz.entity.ai.NpcCombatHelper.retreatPoint(this.npc, target, 7.0D);
+            this.retreatPoint = point;
+        }
+        if (point != null) {
+            this.npc.navigator().moveTo(point, 1.2D);
+        } else {
+            this.npc.navigator().stop();
         }
     }
 }

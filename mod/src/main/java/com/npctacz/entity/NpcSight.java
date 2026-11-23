@@ -141,18 +141,20 @@ public final class NpcSight {
         if (fluid.is(FluidTags.LAVA)) {
             return false;
         }
-        // 玻璃、染色玻璃、遮光玻璃、玻璃板、铁栏杆
-        boolean throughGlass = com.npctacz.config.NpcGlobalConfig.getBoolean("vision_through_glass", true);
-        if (throughGlass && (state.getBlock() instanceof HalfTransparentBlock
+        // 玻璃、树叶等透明遮挡物：由管理员开关控制，默认遮挡视线。
+        boolean occluders = true;
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            occluders = com.npctacz.data.NpcDifficultyData.get(serverLevel)
+                .isVisionOccludersEnabled();
+        }
+        boolean glassLike = state.getBlock() instanceof HalfTransparentBlock
             || state.getBlock() instanceof IronBarsBlock
             || state.is(Blocks.TINTED_GLASS)
             || state.is(Blocks.GLASS_PANE)
-            || state.is(Blocks.IRON_BARS))) {
-            return true;
-        }
-        boolean throughLeaves = com.npctacz.config.NpcGlobalConfig.getBoolean("vision_through_leaves", true);
-        if (throughLeaves && (state.is(BlockTags.LEAVES) || state.getBlock() instanceof LeavesBlock)) {
-            return true;
+            || state.is(Blocks.IRON_BARS);
+        boolean leaves = state.is(BlockTags.LEAVES) || state.getBlock() instanceof LeavesBlock;
+        if (glassLike || leaves) {
+            return !occluders;
         }
         // 地毯/雪层这种薄片不挡视线
         if (state.getBlock() instanceof net.minecraft.world.level.block.CarpetBlock

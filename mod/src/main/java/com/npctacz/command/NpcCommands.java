@@ -42,7 +42,7 @@ import java.util.Locale;
  * /tacznpc 指令层（Brigadier 原生指令，全部带 Tab 补全）。
  *
  * <pre>
- * /tacznpc spawn &lt;soldier|bandit|rebel|bounty_hunter|mercenary|all&gt; [数量]  在玩家前方生成
+ * /tacznpc spawn &lt;soldier|bandit|rebel|bounty_hunter|mercenary|all&gt; [数量] [玩家外] [玩家内]  在玩家周围生成
  * /tacznpc clear [半径]          清除附近的 NPC（默认 64 格）
  * /tacznpc count [半径]          统计附近 NPC 数量
  * /tacznpc givenpc|give &lt;类型|all&gt; [数量]  给 NPC 刷怪蛋（all = 每种各 N 个）
@@ -87,7 +87,23 @@ public final class NpcCommands {
                             context.getSource(),
                             StringArgumentType.getString(context, "type"),
                             IntegerArgumentType.getInteger(context, "count")
-                        )))))
+                        ))
+                        .then(Commands.argument("outer", IntegerArgumentType.integer(0, 1024))
+                            .executes(context -> spawnCommand(
+                                context.getSource(),
+                                StringArgumentType.getString(context, "type"),
+                                IntegerArgumentType.getInteger(context, "count"),
+                                IntegerArgumentType.getInteger(context, "outer"),
+                                0
+                            ))
+                            .then(Commands.argument("inner", IntegerArgumentType.integer(0, 1024))
+                                .executes(context -> spawnCommand(
+                                    context.getSource(),
+                                    StringArgumentType.getString(context, "type"),
+                                    IntegerArgumentType.getInteger(context, "count"),
+                                    IntegerArgumentType.getInteger(context, "outer"),
+                                    IntegerArgumentType.getInteger(context, "inner")
+                                )))))))
             .then(Commands.literal("clear")
                 .executes(context -> clearNpcs(context.getSource(), 64))
                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 256))
@@ -119,6 +135,16 @@ public final class NpcCommands {
                     ))))
             .then(Commands.literal("npcdebug")
                 .executes(context -> npcDebug(context.getSource())))
+            .then(Commands.literal("precision")
+                .executes(context -> showPrecision(context.getSource())))
+            .then(Commands.literal("cadence")
+                .then(Commands.argument("mode", StringArgumentType.word())
+                    .suggests((context, builder) -> SharedSuggestionProvider.suggest(
+                        new String[]{"slow", "normal", "fast"}, builder))
+                    .executes(context -> setCadence(
+                        context.getSource(),
+                        StringArgumentType.getString(context, "mode")
+                    ))))
             .then(Commands.literal("debug_ammo")
                 .then(Commands.argument("magazine", IntegerArgumentType.integer(0, 9999))
                     .then(Commands.argument("reserve", IntegerArgumentType.integer(0, 99999))
@@ -133,6 +159,20 @@ public final class NpcCommands {
                     .executes(context -> setNpcMax(
                         context.getSource(),
                         IntegerArgumentType.getInteger(context, "n")
+                    ))))
+            .then(Commands.literal("deathloot")
+                .executes(context -> queryDeathLoot(context.getSource()))
+                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                    .executes(context -> setDeathLoot(
+                        context.getSource(),
+                        BoolArgumentType.getBool(context, "enabled")
+                    ))))
+            .then(Commands.literal("occlusion")
+                .executes(context -> queryOcclusion(context.getSource()))
+                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                    .executes(context -> setOcclusion(
+                        context.getSource(),
+                        BoolArgumentType.getBool(context, "enabled")
                     ))))
             .then(Commands.literal("reloadconfig").executes(context -> reloadGlobalConfig(context.getSource())))
             .then(Commands.literal("config").executes(context -> showGlobalConfig(context.getSource())))
@@ -880,6 +920,11 @@ public final class NpcCommands {
     }
 
     private static int spawnCommand(CommandSourceStack source, String typeId, int count) {
+        return spawnCommand(source, typeId, count, -1, -1);
+    }
+
+    private static int spawnCommand(CommandSourceStack source, String typeId, int count,
+                                    int outerRadius, int innerRadius) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
             source.sendFailure(Component.literal("该指令需要玩家执行 / Must be run by a player"));
@@ -890,11 +935,11 @@ public final class NpcCommands {
         if ("all".equals(id)) {
             int[] perType = splitCount(count);
             int total = 0;
-            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.SOLDIER.get(), perType[0], false);
-            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.BANDIT.get(), perType[1], false);
-            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.REBEL.get(), perType[2], true);
-            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.BOUNTY_HUNTER.get(), perType[3], true);
-            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.MERCENARY.get(), perType[4], false);
+            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.SOLDIER.get(), perType[0], false, outerRadius, innerRadius);
+            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.BANDIT.get(), perType[1], false, outerRadius, innerRadius);
+            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.REBEL.get(), perType[2], true, outerRadius, innerRadius);
+            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.BOUNTY_HUNTER.get(), perType[3], true, outerRadius, innerRadius);
+            total += NpcSpawnEvents.spawnForCommand(level, player, ModRegistry.MERCENARY.get(), perType[4], false, outerRadius, innerRadius);
             final int finalTotal = total;
             source.sendSuccess(() -> Component.literal(
                 "§a已生成 " + finalTotal + " 个 NPC（all 混合）"
@@ -907,7 +952,8 @@ public final class NpcCommands {
             return 0;
         }
         boolean farGroup = "rebel".equals(id) || "bounty_hunter".equals(id);
-        int spawned = NpcSpawnEvents.spawnForCommand(level, player, type, count, farGroup);
+        int spawned = NpcSpawnEvents.spawnForCommand(level, player, type, count, farGroup,
+            outerRadius, innerRadius);
         if (spawned < count) {
             int cap = com.npctacz.data.NpcDifficultyData.get(level).getMaxNpcs();
             int current = NpcSpawnEvents.countAllNpcs(level.getServer());
@@ -922,6 +968,101 @@ public final class NpcCommands {
             "§a已生成 " + spawned + "/" + count + " 个 " + type.getDescription().getString()
         ), false);
         return spawned;
+    }
+
+    private static int showPrecision(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("该指令需要玩家执行 / Must be run by a player"));
+            return 0;
+        }
+        var npc = ((ServerLevel) player.level()).getEntitiesOfClass(
+            com.npctacz.entity.WastelandNpcEntity.class,
+            player.getBoundingBox().inflate(64.0D)).stream()
+            .min(java.util.Comparator.comparingDouble(player::distanceToSqr)).orElse(null);
+        if (npc == null) {
+            source.sendFailure(Component.literal("§e64 格内没有 NPC"));
+            return 0;
+        }
+        var ammo = npc.ammo();
+        source.sendSuccess(() -> Component.literal(
+            "§6===== 精度状态 =====\n"
+            + "§7NPC：§f" + npc.getFaction() + " §7目标：§f"
+            + (npc.getTarget() == null ? "无" : npc.getTarget().getName().getString())
+            + "\n§7精度：§f" + String.format(java.util.Locale.ROOT, "%.2f", ammo.accuracy())
+            + " §7停火恢复：§f" + ammo.accuracyPauseTicks() + "t"
+            + "\n§7规则：每枪按难度扣 0.02~0.05；<0.4 加散布；<=0.2 远距离停火 10~20t"
+        ), false);
+        return 1;
+    }
+
+    private static int setCadence(CommandSourceStack source, String mode) {
+        int pause;
+        int reaction;
+        boolean continuous;
+        String normalized = mode == null ? "normal" : mode.toLowerCase(java.util.Locale.ROOT);
+        switch (normalized) {
+            case "slow" -> {
+                pause = 50;
+                reaction = 10;
+                continuous = false;
+            }
+            case "fast" -> {
+                pause = 8;
+                reaction = 4;
+                continuous = true;
+            }
+            default -> {
+                pause = 30;
+                reaction = 6;
+                continuous = false;
+            }
+        }
+        com.npctacz.config.NpcConfig.VALUES.burstPauseTicks.set(pause);
+        com.npctacz.config.NpcConfig.VALUES.reactionTicks.set(reaction);
+        com.npctacz.config.NpcConfig.VALUES.continuousFireOnPlayers.set(continuous);
+        try {
+            com.npctacz.config.NpcConfig.SPEC.save();
+        } catch (Throwable ignored) {
+        }
+        source.sendSuccess(() -> Component.literal(
+            "§a攻击节奏：§f" + normalized + " §7(反应 " + reaction + "t / 点射停顿 " + pause + "t)"
+        ), true);
+        return 1;
+    }
+
+    private static int queryOcclusion(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        boolean enabled = com.npctacz.data.NpcDifficultyData.get(level).isVisionOccludersEnabled();
+        source.sendSuccess(() -> Component.literal(
+            "§6遮挡物：§f" + (enabled ? "开（玻璃/树叶挡视线）" : "关（可看穿玻璃/树叶）")
+        ), false);
+        return 1;
+    }
+
+    private static int setOcclusion(CommandSourceStack source, boolean enabled) {
+        com.npctacz.data.NpcDifficultyData.get(source.getLevel()).setVisionOccludersEnabled(enabled);
+        source.sendSuccess(() -> Component.literal(
+            "§a遮挡物已" + (enabled ? "开启：玻璃/树叶挡住视线" : "关闭：玻璃/树叶可看穿")
+        ), true);
+        return 1;
+    }
+
+    private static int queryDeathLoot(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        boolean enabled = com.npctacz.data.NpcDifficultyData.get(level).isDeathLootContainer();
+        source.sendSuccess(() -> Component.literal(
+            "§6死亡容器：§f" + (enabled ? "开（掉落进桶）" : "关（普通掉落）")
+        ), false);
+        return 1;
+    }
+
+    private static int setDeathLoot(CommandSourceStack source, boolean enabled) {
+        com.npctacz.data.NpcDifficultyData.get(source.getLevel()).setDeathLootContainer(enabled);
+        source.sendSuccess(() -> Component.literal(
+            "§a死亡容器已" + (enabled ? "开启：NPC死亡掉落会装进桶" : "关闭：恢复普通掉落")
+        ), true);
+        return 1;
     }
 
     private static int[] splitCount(int total) {
@@ -1241,7 +1382,7 @@ public final class NpcCommands {
     private static int help(CommandSourceStack source, boolean chinese) {
         if (chinese) {
             source.sendSuccess(() -> Component.literal("§6===== /tacznpc 指令 ====="), false);
-            source.sendSuccess(() -> Component.literal("§e/tacznpc spawn <类型> [数量] §7生成 NPC"), false);
+            source.sendSuccess(() -> Component.literal("§e/tacznpc spawn <类型> [数量] [玩家外] [玩家内] §7生成 NPC（距离 0~1024）"), false);
             source.sendSuccess(() -> Component.literal("§e/tacznpc clear [半径] §7清除附近 NPC（默认 64 格）"), false);
             source.sendSuccess(() -> Component.literal("§e/tacznpc count [半径] §7统计附近 NPC 数量"), false);
             source.sendSuccess(() -> Component.literal("§e/tacznpc givenpc|give <类型|all> [数量] §7给刷怪蛋（all=每种各 N 个）"), false);
@@ -1271,7 +1412,7 @@ public final class NpcCommands {
             source.sendSuccess(() -> Component.literal("§7类型：soldier(士兵) / bandit(劫匪) / rebel(叛军) / bounty_hunter(赏金猎人) / mercenary(雇佣兵) / all"), false);
         } else {
             source.sendSuccess(() -> Component.literal("§6===== /tacznpc ====="), false);
-            source.sendSuccess(() -> Component.literal("§e/tacznpc spawn <type> [count] §7spawn NPCs"), false);
+            source.sendSuccess(() -> Component.literal("§e/tacznpc spawn <type> [count] [outer] [inner] §7spawn NPCs (distance 0~1024)"), false);
             source.sendSuccess(() -> Component.literal("§e/tacznpc clear [radius] §7remove nearby NPCs"), false);
             source.sendSuccess(() -> Component.literal("§e/tacznpc count [radius] §7count nearby NPCs"), false);
             source.sendSuccess(() -> Component.literal("§e/tacznpc givenpc|give <type|all> [count] §7give spawn eggs (all = N of each)"), false);

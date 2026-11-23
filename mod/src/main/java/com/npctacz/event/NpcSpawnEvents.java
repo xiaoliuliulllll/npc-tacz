@@ -434,6 +434,19 @@ public final class NpcSpawnEvents {
     /** Used by /tacznpc spawn. 生成在玩家前方 4~13 格，落点会检查地面/水/碰撞和间距。 */
     public static int spawnForCommand(ServerLevel level, ServerPlayer player,
                                       EntityType<?> type, int count, boolean farGroup) {
+        return spawnForCommand(level, player, type, count, farGroup, -1, -1);
+    }
+
+    /**
+     * 带玩家外/玩家内距离的指令生成。outerRadius/innerRadius 为 -1 时保持原来的近身生成。
+     * 距离范围 0~1024；inner 大于 outer 时自动压回。
+     */
+    public static int spawnForCommand(ServerLevel level, ServerPlayer player,
+                                      EntityType<?> type, int count, boolean farGroup,
+                                      int outerRadius, int innerRadius) {
+        boolean fixedRange = outerRadius >= 0 && innerRadius >= 0;
+        int ringOuter = Math.max(0, Math.min(1024, outerRadius));
+        int ringInner = Math.max(0, Math.min(ringOuter, innerRadius));
         // 独立 NPC 上限：全服总数到上限后，指令也不再继续生成
         int cap = Math.max(1, NpcDifficultyData.get(level).getMaxNpcs());
         int existing = countAllNpcs(level.getServer());
@@ -453,10 +466,12 @@ public final class NpcSpawnEvents {
             boolean success = false;
             for (int attempt = 0; attempt < 24 && !success; attempt++) {
                 // 前三次优先玩家正前方（±20 度），之后在周围一圈找空位
-                double angle = attempt < 3
+                double angle = !fixedRange && attempt < 3
                     ? forwardAngle + (random.nextDouble() - 0.5D) * 0.7D
                     : random.nextDouble() * Math.PI * 2.0D;
-                double distance = 3.5D + random.nextDouble() * 10.0D;
+                double distance = fixedRange
+                    ? ringInner + random.nextDouble() * Math.max(0.0D, ringOuter - ringInner)
+                    : 3.5D + random.nextDouble() * 10.0D;
                 int x = player.getBlockX() + (int) Math.round(Math.cos(angle) * distance);
                 int z = player.getBlockZ() + (int) Math.round(Math.sin(angle) * distance);
                 BlockPos pos = findSafePos(level, x, z, player.getBlockY(), 8);
@@ -482,6 +497,10 @@ public final class NpcSpawnEvents {
                 }
             }
             if (!success) {
+                // 指定了距离时不要退化到玩家脚下，否则会破坏玩家外/玩家内范围。
+                if (fixedRange) {
+                    continue;
+                }
                 // 狭窄地形/障碍物多：退化为玩家身边直接生成，保证命令数量准确
                 BlockPos fallback = findSafePos(level, player.getBlockX(), player.getBlockZ(),
                     player.getBlockY(), 12);

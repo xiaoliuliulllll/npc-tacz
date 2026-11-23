@@ -40,7 +40,7 @@ public final class ClientEvents {
     private ClientEvents() {
     }
 
-    public static final class NpcRenderer extends HumanoidMobRenderer<WastelandNpcEntity, PlayerModel<WastelandNpcEntity>> {
+    public static final class NpcRenderer extends HumanoidMobRenderer<WastelandNpcEntity, HumanoidModel<WastelandNpcEntity>> {
         private static final ResourceLocation FALLBACK_TEXTURE =
             new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
         /** 玩家提供的三个阵营皮肤（64x64 现代皮肤布局）。 */
@@ -56,7 +56,10 @@ public final class ClientEvents {
             new ResourceLocation("npc_tacz", "textures/entity/bounty_hunter.png");
 
         public NpcRenderer(EntityRendererProvider.Context context) {
-            super(context, new PlayerModel<>(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
+            // 不使用 PlayerModel：部分玩家模型替换 Mod/资源包会去掉 ear 部件，
+            // 导致 PlayerModel 构造时抛 "Can't find part ear"；HumanoidModel 只依赖
+            // head/body/arms/legs 这些原版必备部件，兼容性更好。
+            super(context, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER)), 0.5F);
             this.shadowRadius = 0.3F;
             this.shadowStrength = 0.6F;
         }
@@ -65,7 +68,7 @@ public final class ClientEvents {
         public boolean shouldRender(WastelandNpcEntity entity, Frustum frustum,
                                     double camX, double camY, double camZ) {
             // Frame-rate guard: do not render distant NPC bodies/models.
-            return entity.distanceToSqr(camX, camY, camZ) <= 40.0D * 40.0D
+            return entity.distanceToSqr(camX, camY, camZ) <= 24.0D * 24.0D
                 && super.shouldRender(entity, frustum, camX, camY, camZ);
         }
 
@@ -87,37 +90,4 @@ public final class ClientEvents {
         }
     }
 
-    /** Armor is the most expensive humanoid layer; skip it beyond 24 blocks. */
-    private static final class LodArmorLayer extends HumanoidArmorLayer<
-        WastelandNpcEntity,
-        PlayerModel<WastelandNpcEntity>,
-        HumanoidModel<WastelandNpcEntity>> {
-
-        private final HumanoidModel<WastelandNpcEntity> inner;
-        private final HumanoidModel<WastelandNpcEntity> outer;
-
-        private LodArmorLayer(EntityRendererProvider.Context context, NpcRenderer parent,
-                              net.minecraft.client.model.geom.ModelPart innerPart,
-                              net.minecraft.client.model.geom.ModelPart outerPart) {
-            super(parent,
-                new HumanoidModel<>(innerPart),
-                new HumanoidModel<>(outerPart),
-                context.getModelManager());
-            this.inner = new HumanoidModel<>(innerPart);
-            this.outer = new HumanoidModel<>(outerPart);
-        }
-
-        @Override
-        public void render(PoseStack poseStack, MultiBufferSource bufferSource, int packedLight,
-                           WastelandNpcEntity entity, float limbSwing, float limbSwingAmount,
-                           float partialTicks, float ageInTicks, float netHeadYaw, float headPitch) {
-            var local = Minecraft.getInstance().player;
-            if (local != null && entity.distanceToSqr(local) > 24.0D * 24.0D) {
-                return;
-            }
-            super.render(poseStack, bufferSource, packedLight, entity, limbSwing, limbSwingAmount,
-                partialTicks, ageInTicks, netHeadYaw, headPitch);
-        }
-    }
 }
-

@@ -322,7 +322,7 @@ npc_extra_spread_degrees : 1.5
 
 // 代码：accuracy_multiplier
 // 中文：散布倍率（越小越准）
-accuracy_multiplier : 1.0
+accuracy_multiplier : 0.75
 
 // 代码：spread_degrees
 // 中文：基础散布角度（度）
@@ -394,7 +394,7 @@ refill_seconds_melee : 5
 
 // 代码：vision_through_glass
 // 中文：NPC 能否看穿玻璃类方块
-vision_through_glass : true
+vision_through_glass : false
 
 // 代码：vision_through_leaves
 // 中文：NPC 能否看穿树叶

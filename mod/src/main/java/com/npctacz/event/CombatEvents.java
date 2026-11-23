@@ -51,6 +51,9 @@ public final class CombatEvents {
 
     @SubscribeEvent
     public static void onLivingHurt(LivingHurtEvent event) {
+        // 四类来源/去向伤害倍率（默认 1.0，Alt+N 第 7 页可调）。
+        applyDirectedDamageMultipliers(event);
+
         // 所有 NPC 受到近战伤害的全局倍率（直接实体 == 来源实体，排除子弹/箭/爆炸）
         if (event.getEntity() instanceof WastelandNpcEntity victimNpc
             && !victimNpc.level().isClientSide
@@ -194,6 +197,37 @@ public final class CombatEvents {
                 float pitchKick = -(2.8F + attacker.getRandom().nextFloat() * 1.8F)
                     * strength * damageScale;
                 com.npctacz.network.NpcNetwork.sendHitKick(serverPlayer, yawKick, pitchKick);
+            }
+        }
+    }
+
+    /** NPC→玩家、NPC→怪物、玩家→NPC、怪物→NPC 四类倍率。 */
+    private static void applyDirectedDamageMultipliers(LivingHurtEvent event) {
+        if (!(event.getEntity().level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            return;
+        }
+        Entity sourceEntity = event.getSource().getEntity();
+        Entity victimEntity = event.getEntity();
+        var data = com.npctacz.data.NpcDifficultyData.get(level);
+
+        if (victimEntity instanceof WastelandNpcEntity && sourceEntity != null) {
+            if (sourceEntity instanceof Player) {
+                event.setAmount((float) (event.getAmount()
+                    * data.getPlayerToNpcDamageMultiplier()));
+            } else if (sourceEntity instanceof LivingEntity) {
+                // 生物=所有非玩家活体，包括 NPC、怪物、动物。
+                event.setAmount((float) (event.getAmount()
+                    * data.getMobToNpcDamageMultiplier()));
+            }
+        }
+        if (sourceEntity instanceof WastelandNpcEntity) {
+            if (victimEntity instanceof Player) {
+                event.setAmount((float) (event.getAmount()
+                    * data.getNpcToPlayerDamageMultiplier()));
+            } else if (victimEntity instanceof LivingEntity) {
+                // 生物=所有非玩家活体，包括 NPC、怪物、动物。
+                event.setAmount((float) (event.getAmount()
+                    * data.getNpcToMobDamageMultiplier()));
             }
         }
     }

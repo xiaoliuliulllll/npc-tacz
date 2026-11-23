@@ -17,6 +17,8 @@ import net.minecraftforge.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
 
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -130,11 +132,17 @@ public final class NpcAdminDefaults {
     }
 
     public static synchronized void apply(MinecraftServer server) {
-        if (server == null || server.overworld() == null || !Files.isRegularFile(FILE)) {
+        if (server == null || server.overworld() == null) {
             return;
         }
         try {
-            JsonObject root = GSON.fromJson(Files.readString(FILE, StandardCharsets.UTF_8), JsonObject.class);
+            JsonObject root;
+            if (Files.isRegularFile(FILE)) {
+                root = GSON.fromJson(Files.readString(FILE, StandardCharsets.UTF_8), JsonObject.class);
+            } else {
+                // 配置还没生成时，使用打进 jar 的默认管理员设置。
+                root = loadBundledDefaults();
+            }
             if (root == null) {
                 return;
             }
@@ -226,6 +234,19 @@ public final class NpcAdminDefaults {
             LOGGER.info("[npc-tacz] applied global admin defaults from {}", FILE);
         } catch (Throwable throwable) {
             LOGGER.warn("[npc-tacz] failed to apply global admin defaults", throwable);
+        }
+    }
+
+    private static JsonObject loadBundledDefaults() {
+        try (InputStream input = NpcAdminDefaults.class.getResourceAsStream(
+            "/assets/npc_tacz/default_admin_settings.json")) {
+            if (input == null) {
+                return null;
+            }
+            return GSON.fromJson(new InputStreamReader(input, StandardCharsets.UTF_8), JsonObject.class);
+        } catch (Throwable throwable) {
+            LOGGER.warn("[npc-tacz] failed to load bundled admin defaults", throwable);
+            return null;
         }
     }
 

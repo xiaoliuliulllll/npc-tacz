@@ -58,6 +58,8 @@ public final class NpcSpawnConfigData extends SavedData {
     }
 
     private final EnumMap<NpcFaction, Rule> rules = new EnumMap<>(NpcFaction.class);
+    /** 最近一次“全部间隔”设置的 tick 数；用于界面显示，不再依赖第一个阵营。 */
+    private long allIntervalTicks = 10L * TICKS_PER_MINUTE;
 
     public static NpcSpawnConfigData get(ServerLevel level) {
         return level.getServer().overworld().getDataStorage().computeIfAbsent(
@@ -96,6 +98,19 @@ public final class NpcSpawnConfigData extends SavedData {
         this.setDirty();
     }
 
+    public long getAllIntervalTicks() {
+        return this.allIntervalTicks;
+    }
+
+    /** 设置“全部间隔”：同时更新显示值和所有阵营。 */
+    public void setAllInterval(long ticks) {
+        this.allIntervalTicks = Math.max(TICKS_PER_SECOND, ticks);
+        for (NpcFaction faction : NpcFaction.values()) {
+            this.rule(faction).intervalTicks = this.allIntervalTicks;
+        }
+        this.setDirty();
+    }
+
     public void setAmount(NpcFaction faction, int min, int max) {
         Rule rule = rule(faction);
         rule.amountMin = Math.max(0, Math.min(min, max));
@@ -112,6 +127,7 @@ public final class NpcSpawnConfigData extends SavedData {
 
     public void resetDefaults() {
         this.rules.clear();
+        this.allIntervalTicks = 10L * TICKS_PER_MINUTE;
         for (NpcFaction faction : NpcFaction.values()) {
             this.rules.put(faction, defaultRule(faction));
         }
@@ -146,6 +162,9 @@ public final class NpcSpawnConfigData extends SavedData {
             }
             data.rules.put(faction, rule);
         }
+        data.allIntervalTicks = tag.contains("AllInterval")
+            ? Math.max(TICKS_PER_SECOND, tag.getLong("AllInterval"))
+            : data.rule(NpcFaction.SOLDIER).intervalTicks;
         return data;
     }
 
@@ -164,6 +183,7 @@ public final class NpcSpawnConfigData extends SavedData {
             rules.put(faction.name(), entry);
         }
         tag.put("Rules", rules);
+        tag.putLong("AllInterval", this.allIntervalTicks);
         return tag;
     }
 

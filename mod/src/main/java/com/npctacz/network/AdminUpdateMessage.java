@@ -73,12 +73,29 @@ public final class AdminUpdateMessage {
                 NpcNetwork.sendAdminSettings(sender, AdminSettingsMessage.snapshot(sender));
                 return;
             }
+            if ("ammo_box_deposit".equals(this.action)) {
+                com.npctacz.event.AmmoBoxDepositEvents.handleManual(sender, this.valueA != 0.0D);
+                return;
+            }
+            if ("clear_loot_barrels".equals(this.action)) {
+                // 战利品桶清理是玩家功能：只清自己 64 格内、当前维度的自动桶。
+                int removed = com.npctacz.data.DeathLootBarrelData.get(sender.serverLevel())
+                    .clearNear(sender.serverLevel(), sender.blockPosition(), 64.0D);
+                sender.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                    "§a已清除附近 " + removed + " 个战利品桶"
+                ), true);
+                return;
+            }
             if (!sender.hasPermissions(2)) {
                 return;
             }
             NpcFaction[] factions = NpcFaction.values();
             switch (this.action) {
                 case "damage" -> difficulty.setGlobalDamageMultiplier(this.valueA);
+                case "npc_to_player_damage" -> difficulty.setNpcToPlayerDamageMultiplier(this.valueA);
+                case "npc_to_mob_damage" -> difficulty.setNpcToMobDamageMultiplier(this.valueA);
+                case "player_to_npc_damage" -> difficulty.setPlayerToNpcDamageMultiplier(this.valueA);
+                case "mob_to_npc_damage" -> difficulty.setMobToNpcDamageMultiplier(this.valueA);
                 case "firerate" -> difficulty.setGlobalFireRateMultiplier(this.valueA);
                 case "reaction" -> difficulty.setReactionTimeMultiplier(this.valueA);
                 case "health" -> {
@@ -119,12 +136,29 @@ public final class AdminUpdateMessage {
                 case "difficulty" -> difficulty.setDifficulty((int) Math.round(this.valueA));
                 case "drop_guns" -> difficulty.setDropGuns(this.valueA != 0.0D);
                 case "drop_ammo" -> difficulty.setDropAmmo(this.valueA != 0.0D);
+                case "death_loot_container" -> difficulty.setDeathLootContainer(this.valueA != 0.0D);
+                case "ammo_box_drop" -> difficulty.setNpcAmmoBoxDropEnabled(this.valueA != 0.0D);
+                case "death_loot_auto_remove" -> {
+                    boolean enabled = this.valueA != 0.0D;
+                    difficulty.setDeathLootBarrelAutoRemove(enabled);
+                    if (!enabled) {
+                        com.npctacz.data.DeathLootBarrelData.get(sender.serverLevel()).clearTracking();
+                    }
+                }
+                case "death_loot_lifetime" ->
+                    difficulty.setDeathLootBarrelLifetimeSeconds((int) Math.round(this.valueA));
+                case "vision_occluders" -> difficulty.setVisionOccludersEnabled(this.valueA != 0.0D);
+                case "npc_glow" -> difficulty.setNpcGlowEnabled(this.valueA != 0.0D);
                 case "ammo_multiplier" -> difficulty.setAmmoDropMultiplier(this.valueA);
                 case "max_npcs" -> difficulty.setMaxNpcs((int) Math.round(this.valueA));
                 case "spawn_enabled" -> difficulty.setSpawnEnabled(this.valueA != 0.0D);
                 case "spawn_prompt" -> difficulty.setGeneratePrompt(this.valueA != 0.0D);
                 case "reset_defaults" -> {
                     difficulty.setGlobalDamageMultiplier(1.0D);
+                    difficulty.setNpcToPlayerDamageMultiplier(1.0D);
+                    difficulty.setNpcToMobDamageMultiplier(1.0D);
+                    difficulty.setPlayerToNpcDamageMultiplier(1.0D);
+                    difficulty.setMobToNpcDamageMultiplier(1.0D);
                     difficulty.setGlobalFireRateMultiplier(1.0D);
                     difficulty.setReactionTimeMultiplier(1.0D);
                     difficulty.setGlobalHealthMultiplier(1.0D);
@@ -137,6 +171,12 @@ public final class AdminUpdateMessage {
                     difficulty.setAmmoDropMultiplier(1.0D);
                     difficulty.setDropGuns(true);
                     difficulty.setDropAmmo(true);
+                    difficulty.setDeathLootContainer(false);
+                    difficulty.setNpcAmmoBoxDropEnabled(false);
+                    difficulty.setDeathLootBarrelAutoRemove(true);
+                    difficulty.setDeathLootBarrelLifetimeSeconds(1200);
+                    difficulty.setVisionOccludersEnabled(false);
+                    difficulty.setNpcGlowEnabled(false);
                     difficulty.setSpawnEnabled(true);
                     difficulty.setGeneratePrompt(true);
                     difficulty.setMaxNpcs(32);
@@ -164,9 +204,10 @@ public final class AdminUpdateMessage {
                 }
                 case "spawn_interval_all" -> {
                     long ticks = Math.max(20L, Math.round(this.valueA));
-                    for (NpcFaction faction : factions) {
-                        spawn.setInterval(faction, ticks);
-                    }
+                    spawn.setAllInterval(ticks);
+                    sender.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                        "§a全部生成间隔已设为 " + (ticks / 20L) + " 秒"
+                    ), true);
                 }
                 case "spawn_range_all" -> {
                     double outer = Math.max(16.0D, Math.min(4096.0D, this.valueA));
@@ -175,12 +216,49 @@ public final class AdminUpdateMessage {
                         spawn.setRange(faction, outer, inner);
                     }
                 }
+                case "clear_nearby_npcs" -> {
+                    var level = sender.serverLevel();
+                    for (com.npctacz.entity.WastelandNpcEntity npc : level.getEntitiesOfClass(
+                        com.npctacz.entity.WastelandNpcEntity.class,
+                        sender.getBoundingBox().inflate(64.0D))) {
+                        if (npc instanceof com.npctacz.entity.MercenaryNpc mercenary && mercenary.isHired()) {
+                            continue;
+                        }
+                        npc.discard();
+                    }
+                    com.npctacz.event.NpcSpawnEvents.invalidateCountCache();
+                }
+                case "combat_cadence" -> {
+                    int mode = (int) Math.round(this.valueA);
+                    int pause = mode == 0 ? 50 : mode == 1 ? 30 : 8;
+                    int reaction = mode == 0 ? 10 : mode == 1 ? 6 : 4;
+                    com.npctacz.config.NpcConfig.VALUES.burstPauseTicks.set(pause);
+                    com.npctacz.config.NpcConfig.VALUES.reactionTicks.set(reaction);
+                    com.npctacz.config.NpcConfig.VALUES.continuousFireOnPlayers.set(mode == 2);
+                    try {
+                        com.npctacz.config.NpcConfig.SPEC.save();
+                    } catch (Throwable ignored) {
+                    }
+                }
+                case "low_spec_preset" -> {
+                    difficulty.setMaxNpcs(32);
+                    for (NpcFaction faction : factions) {
+                        int min = faction == NpcFaction.BOUNTY_HUNTER || faction == NpcFaction.MERCENARY ? 1 : 2;
+                        int max = faction == NpcFaction.BOUNTY_HUNTER || faction == NpcFaction.MERCENARY ? 1 : 4;
+                        long interval = faction == NpcFaction.BOUNTY_HUNTER ? 120000L
+                            : faction == NpcFaction.MERCENARY ? 72000L : 12000L;
+                        spawn.setAmount(faction, min, max);
+                        spawn.setInterval(faction, interval);
+                        spawn.setEnabled(faction, true);
+                    }
+                }
                 default -> {
                     return;
                 }
             }
             com.npctacz.event.NpcAdminDefaults.save(sender.getServer());
-            if (this.action.startsWith("spawn_") || this.action.equals("reset_defaults")) {
+            if (this.action.startsWith("spawn_") || this.action.equals("reset_defaults")
+                || this.action.equals("low_spec_preset")) {
                 com.npctacz.event.NpcSpawnEvents.onConfigChanged();
             }
             NpcNetwork.sendAdminSettings(sender, AdminSettingsMessage.snapshot(sender));

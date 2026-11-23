@@ -4,7 +4,7 @@ plugins {
     id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
 }
 
-version = '1.0.0'
+version = '1.1.4'
 group = 'com.npctacz'
 base {
     archivesName = 'npc-tacz'
@@ -17,18 +17,17 @@ minecraft {
 }
 
 repositories {
-    maven { url = 'https://maven.minecraftforge.net/' }
+    maven { url = uri('file:///D:/mc/.minecraft/libraries') }
+    maven { url = uri('local-maven') }
     mavenCentral()
 }
 
+
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.4.10'
-
-    // Local compile-only dependency. Download TACZ yourself and place it at:
-    //   mod/libs/tacz.jar
-    // Never commit or redistribute this jar.
+    // 閹?TACZ 1.2.0 閻?jar 閺€鎯у煂 libs/tacz.jar
     compileOnly files('libs/tacz.jar')
-    compileOnly 'it.unimi.dsi:fastutil:8.5.9'
+    compileOnly files('libs/fastutil-8.5.9.jar')
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -40,13 +39,15 @@ jar {
         attributes([
             'Specification-Title'     : 'npc_tacz',
             'Specification-Vendor'    : 'npc_tacz',
-            'Specification-Version'   : '1',
+            'Specification-Version'   : '1.1.4',
             'Implementation-Title'    : project.name,
             'Implementation-Version'  : project.version,
             'Implementation-Vendor'   : 'npc_tacz'
         ])
     }
 }
+
+
 
 minecraft {
     runs {

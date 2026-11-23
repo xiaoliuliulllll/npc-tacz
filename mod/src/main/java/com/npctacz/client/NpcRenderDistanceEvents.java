@@ -39,14 +39,4 @@ public final class NpcRenderDistanceEvents {
         }
     }
 
-    /** 兜底：最低优先级再确认一次，避免其它 Forge 渲染事件处理器把我们的 NPC 取消掉。 */
-    @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
-    public static void forceVisibleAtLowest(RenderLivingEvent.Pre<?, ?> event) {
-        if (!(event.getEntity() instanceof WastelandNpcEntity)) {
-            return;
-        }
-        if (NpcAdminClientSettings.effectiveViewDistance() <= 0 && event.isCanceled()) {
-            event.setCanceled(false);
-        }
-    }
 }

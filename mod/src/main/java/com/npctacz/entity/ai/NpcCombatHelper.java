@@ -1,11 +1,24 @@
 package com.npctacz.entity.ai;
 
 import com.npctacz.config.NpcConfig;
+import com.npctacz.entity.NpcFaction;
 import com.npctacz.entity.NpcSight;
+import com.npctacz.entity.SoldierNpc;
 import com.npctacz.entity.WastelandNpcEntity;
+import com.tacz.guns.api.item.IGun;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ShieldItem;
+import net.minecraft.world.item.SwordItem;
+import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -63,7 +76,7 @@ public final class NpcCombatHelper {
     /** 每 tick 全局索敌扫描预算，NPC 很多时分摊到后续 tick，避免掉 TPS。 */
     private static long scanBudgetTick = Long.MIN_VALUE;
     private static int scanBudgetLeft;
-    private static final int SCAN_BUDGET_PER_TICK = 24;
+    private static final int SCAN_BUDGET_PER_TICK = 12;
 
     public static LivingEntity scanForTarget(WastelandNpcEntity npc, double radius) {
         long tick = npc.level().getGameTime();
@@ -130,6 +143,16 @@ public final class NpcCombatHelper {
                 continue;
             }
             double score = score(npc, candidate, Math.sqrt(distanceSqr), mobRadius, visible);
+            if (candidate instanceof net.minecraft.world.entity.monster.Enemy) {
+                // 生物威胁：正在攻击自己/正在攻击队友的怪物优先。
+                if (npc.getLastHurtByMob() == candidate) {
+                    score += 0.8D;
+                }
+                if (candidate instanceof net.minecraft.world.entity.Mob mob
+                    && mob.getTarget() == npc) {
+                    score += 0.35D;
+                }
+            }
             if (candidate == current) {
                 score += switchBonus;
             }
@@ -144,29 +167,98 @@ public final class NpcCombatHelper {
         return best;
     }
 
+    /** 玩家主手/副手是否拿着枪械或近战/远程武器。 */
+    public static boolean isArmedPlayer(LivingEntity entity) {
+        if (!(entity instanceof Player player)) {
+            return false;
+        }
+        return isWeapon(player.getMainHandItem()) || isWeapon(player.getOffhandItem());
+    }
+
+    public static boolean isWeapon(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        if (IGun.getIGunOrNull(stack) != null) {
+            return true;
+        }
+        Item item = stack.getItem();
+        if (item instanceof SwordItem || item instanceof AxeItem || item instanceof TridentItem
+            || item instanceof BowItem || item instanceof CrossbowItem || item instanceof ShieldItem) {
+            return true;
+        }
+        return stack.getAttributeModifiers(EquipmentSlot.MAINHAND)
+            .get(Attributes.ATTACK_DAMAGE).stream()
+            .anyMatch(modifier -> modifier.getAmount() > 1.0D);
+    }
+
+    /** 附近最近且对 NPC 敌对的持武器玩家。 */
+    @Nullable
+    public static Player findNearestArmedPlayer(WastelandNpcEntity npc, double radius) {
+        Player nearest = null;
+        double best = Double.MAX_VALUE;
+        for (Player player : npc.level().getEntitiesOfClass(
+            Player.class, npc.getBoundingBox().inflate(radius), Player::isAlive)) {
+            if (!npc.isHostileTo(player) || !isArmedPlayer(player)) {
+                continue;
+            }
+            double distance = npc.distanceToSqr(player);
+            if (distance < best) {
+                best = distance;
+                nearest = player;
+            }
+        }
+        return nearest;
+    }
+
     public static int targetPriority(LivingEntity candidate) {
-        // 数值越小优先级越高：敌对生物 > 玩家 > 敌对 NPC。
-        // 攻击者不在普通索敌里，由 forcedTarget/lastHurtByMob 最高优先处理。
         if (candidate instanceof net.minecraft.world.entity.monster.Enemy) {
-            return 1;
+            return 0;
         }
         if (candidate instanceof Player) {
             return 2;
         }
         if (candidate instanceof WastelandNpcEntity) {
+            return 2;
+        }
+        return 2;
+    }
+
+    /**
+     * 阵营目标优先级（数值越小越优先）：
+     * 士兵/叛军：敌对生物0，士兵NPC1，其他NPC2，玩家3；
+     * 劫匪：敌对生物0，NPC2，玩家3；
+     * 赏金猎人：敌对生物0，玩家1，NPC2；
+     * 雇佣兵：敌对生物0，玩家/NPC2。
+     */
+    public static int targetPriority(WastelandNpcEntity npc, LivingEntity candidate) {
+        if (candidate instanceof net.minecraft.world.entity.monster.Enemy) {
+            return 0;
+        }
+        if (npc == null) {
+            return targetPriority(candidate);
+        }
+        NpcFaction faction = npc.getFaction();
+        if (candidate instanceof Player) {
+            if (faction == NpcFaction.BOUNTY_HUNTER) return 1;
+            if (faction == NpcFaction.MERCENARY) return 2;
             return 3;
+        }
+        if (candidate instanceof WastelandNpcEntity otherNpc) {
+            if ((faction == NpcFaction.SOLDIER || faction == NpcFaction.REBEL)
+                && otherNpc instanceof SoldierNpc) {
+                return 1;
+            }
+            if (faction == NpcFaction.BOUNTY_HUNTER) return 2;
+            return 2;
         }
         return 2;
     }
 
     private static double score(WastelandNpcEntity npc, LivingEntity candidate, double distance,
                                 double radius, boolean visible) {
-        // 目标优先级：攻击自己的生物 > 敌对生物 > 敌对 NPC > 玩家。
-        // 反击目标由 NpcTargetGoal 的 forced target 再优先处理；这里负责普通索敌权重。
-        double score = (3 - targetPriority(candidate)) * 1000.0D;
-        if (radius > 1.0E-4D) {
-            score += 1.0D - Math.min(1.0D, distance / radius);
-        }
+        // 普通索敌只看距离：越近越高分；反击攻击者由 forcedTarget 单独置顶。
+        double score = -distance;
         if (visible) {
             score += 0.35D;
         } else if (distance < 20.0D) {
@@ -174,11 +266,12 @@ public final class NpcCombatHelper {
         } else {
             score -= 0.2D;
         }
-        if (candidate instanceof Player) {
-            score += 0.1D;
-        }
         if (candidate.getHealth() / Math.max(1.0F, candidate.getMaxHealth()) < 0.35F) {
             score += 0.1D;
+        }
+        // 拿武器/枪械的玩家：最高优先级，距离再远也优先于普通目标。
+        if (candidate instanceof Player player && isArmedPlayer(player)) {
+            score += 10000.0D;
         }
         return score;
     }

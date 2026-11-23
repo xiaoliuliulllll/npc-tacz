@@ -8,17 +8,7 @@ public enum NpcFaction {
     MERCENARY;
 
     public boolean isHostileTo(NpcFaction other) {
-        if (other == null || other == this) {
-            return false;
-        }
-        if (this == BOUNTY_HUNTER || other == BOUNTY_HUNTER
-            || this == MERCENARY || other == MERCENARY) {
-            return false;
-        }
-        if (this == REBEL || other == REBEL) {
-            return true;
-        }
-        return (this == SOLDIER && other == BANDIT)
-            || (this == BANDIT && other == SOLDIER);
+        // 各阵营之间默认敌对；同阵营不互相攻击。具体目标优先级由 AI 决定。
+        return other != null && other != this;
     }
 }

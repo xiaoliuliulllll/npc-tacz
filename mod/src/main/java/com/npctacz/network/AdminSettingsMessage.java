@@ -21,6 +21,10 @@ public final class AdminSettingsMessage {
     public final int difficulty;
     public final boolean canEdit;
     public final double damageMultiplier;
+    public final double npcToPlayerDamageMultiplier;
+    public final double npcToMobDamageMultiplier;
+    public final double playerToNpcDamageMultiplier;
+    public final double mobToNpcDamageMultiplier;
     public final double fireRateMultiplier;
     public final double reactionTimeMultiplier;
     public final double healthMultiplier;
@@ -40,6 +44,12 @@ public final class AdminSettingsMessage {
     public final double[] factionSpreadMultipliers;
     public final boolean dropGuns;
     public final boolean dropAmmo;
+    public final boolean deathLootContainer;
+    public final boolean npcAmmoBoxDropEnabled;
+    public final boolean deathLootBarrelAutoRemove;
+    public final int deathLootBarrelLifetimeSeconds;
+    public final boolean visionOccludersEnabled;
+    public final boolean npcGlowEnabled;
     public final double ammoDropMultiplier;
     public final int maxNpcs;
     public final int currentNpcs;
@@ -47,13 +57,16 @@ public final class AdminSettingsMessage {
     public final boolean generatePrompt;
     public final boolean[] spawnFactionEnabled;
     public final long[] intervals;
+    public final long allSpawnIntervalTicks;
     public final int[] amountMin;
     public final int[] amountMax;
     public final double[] innerRadii;
     public final double[] outerRadii;
 
     public AdminSettingsMessage(int difficulty, boolean canEdit,
-                                double damageMultiplier, double fireRateMultiplier,
+                                double damageMultiplier, double npcToPlayerDamageMultiplier,
+                                double npcToMobDamageMultiplier, double playerToNpcDamageMultiplier,
+                                double mobToNpcDamageMultiplier, double fireRateMultiplier,
                                 double reactionTimeMultiplier,
                                 double healthMultiplier, double movementSpeedMultiplier,
                                 boolean soldierHostilePlayers, int viewDistance,
@@ -63,14 +76,23 @@ public final class AdminSettingsMessage {
                                 boolean chatNotifications, double playerHeadshotBonus,
                                 double spreadMultiplier, double rangeMultiplier,
                                 double[] factionRangeMultipliers, double[] factionSpreadMultipliers,
-                                boolean dropGuns, boolean dropAmmo, double ammoDropMultiplier,
+                                boolean dropGuns, boolean dropAmmo, boolean deathLootContainer,
+                                boolean npcAmmoBoxDropEnabled,
+                                boolean deathLootBarrelAutoRemove, int deathLootBarrelLifetimeSeconds,
+                                boolean visionOccludersEnabled, boolean npcGlowEnabled,
+                                double ammoDropMultiplier,
                                 int maxNpcs, int currentNpcs, boolean spawnEnabled, boolean generatePrompt,
                                 boolean[] spawnFactionEnabled,
-                                long[] intervals, int[] amountMin, int[] amountMax,
+                                long[] intervals, long allSpawnIntervalTicks,
+                                int[] amountMin, int[] amountMax,
                                 double[] innerRadii, double[] outerRadii) {
         this.difficulty = difficulty;
         this.canEdit = canEdit;
         this.damageMultiplier = damageMultiplier;
+        this.npcToPlayerDamageMultiplier = npcToPlayerDamageMultiplier;
+        this.npcToMobDamageMultiplier = npcToMobDamageMultiplier;
+        this.playerToNpcDamageMultiplier = playerToNpcDamageMultiplier;
+        this.mobToNpcDamageMultiplier = mobToNpcDamageMultiplier;
         this.fireRateMultiplier = fireRateMultiplier;
         this.reactionTimeMultiplier = reactionTimeMultiplier;
         this.healthMultiplier = healthMultiplier;
@@ -90,6 +112,12 @@ public final class AdminSettingsMessage {
         this.factionSpreadMultipliers = factionSpreadMultipliers;
         this.dropGuns = dropGuns;
         this.dropAmmo = dropAmmo;
+        this.deathLootContainer = deathLootContainer;
+        this.npcAmmoBoxDropEnabled = npcAmmoBoxDropEnabled;
+        this.deathLootBarrelAutoRemove = deathLootBarrelAutoRemove;
+        this.deathLootBarrelLifetimeSeconds = deathLootBarrelLifetimeSeconds;
+        this.visionOccludersEnabled = visionOccludersEnabled;
+        this.npcGlowEnabled = npcGlowEnabled;
         this.ammoDropMultiplier = ammoDropMultiplier;
         this.maxNpcs = maxNpcs;
         this.currentNpcs = currentNpcs;
@@ -97,6 +125,7 @@ public final class AdminSettingsMessage {
         this.generatePrompt = generatePrompt;
         this.spawnFactionEnabled = spawnFactionEnabled;
         this.intervals = intervals;
+        this.allSpawnIntervalTicks = allSpawnIntervalTicks;
         this.amountMin = amountMin;
         this.amountMax = amountMax;
         this.innerRadii = innerRadii;
@@ -134,6 +163,10 @@ public final class AdminSettingsMessage {
             difficulty.getDifficulty(),
             player.hasPermissions(2),
             difficulty.getGlobalDamageMultiplier(),
+            difficulty.getNpcToPlayerDamageMultiplier(),
+            difficulty.getNpcToMobDamageMultiplier(),
+            difficulty.getPlayerToNpcDamageMultiplier(),
+            difficulty.getMobToNpcDamageMultiplier(),
             difficulty.getGlobalFireRateMultiplier(),
             difficulty.getReactionTimeMultiplier(),
             difficulty.getGlobalHealthMultiplier(),
@@ -150,12 +183,18 @@ public final class AdminSettingsMessage {
             factionRange, factionSpread,
             difficulty.isDropGuns(),
             difficulty.isDropAmmo(),
+            difficulty.isDeathLootContainer(),
+            difficulty.isNpcAmmoBoxDropEnabled(),
+            difficulty.isDeathLootBarrelAutoRemove(),
+            difficulty.getDeathLootBarrelLifetimeSeconds(),
+            difficulty.isVisionOccludersEnabled(),
+            difficulty.isNpcGlowEnabled(),
             difficulty.getAmmoDropMultiplier(),
             difficulty.getMaxNpcs(),
             com.npctacz.event.NpcSpawnEvents.countAllNpcs(player.getServer()),
             difficulty.isSpawnEnabled(),
             difficulty.isGeneratePrompt(),
-            enabled, intervals, mins, maxs, innerRadii, outerRadii
+            enabled, intervals, spawn.getAllIntervalTicks(), mins, maxs, innerRadii, outerRadii
         );
     }
 
@@ -163,6 +202,10 @@ public final class AdminSettingsMessage {
         buffer.writeVarInt(message.difficulty);
         buffer.writeBoolean(message.canEdit);
         buffer.writeDouble(message.damageMultiplier);
+        buffer.writeDouble(message.npcToPlayerDamageMultiplier);
+        buffer.writeDouble(message.npcToMobDamageMultiplier);
+        buffer.writeDouble(message.playerToNpcDamageMultiplier);
+        buffer.writeDouble(message.mobToNpcDamageMultiplier);
         buffer.writeDouble(message.fireRateMultiplier);
         buffer.writeDouble(message.reactionTimeMultiplier);
         buffer.writeDouble(message.healthMultiplier);
@@ -191,6 +234,12 @@ public final class AdminSettingsMessage {
         }
         buffer.writeBoolean(message.dropGuns);
         buffer.writeBoolean(message.dropAmmo);
+        buffer.writeBoolean(message.deathLootContainer);
+        buffer.writeBoolean(message.npcAmmoBoxDropEnabled);
+        buffer.writeBoolean(message.deathLootBarrelAutoRemove);
+        buffer.writeVarInt(message.deathLootBarrelLifetimeSeconds);
+        buffer.writeBoolean(message.visionOccludersEnabled);
+        buffer.writeBoolean(message.npcGlowEnabled);
         buffer.writeDouble(message.ammoDropMultiplier);
         buffer.writeVarInt(message.maxNpcs);
         buffer.writeVarInt(message.currentNpcs);
@@ -199,6 +248,7 @@ public final class AdminSettingsMessage {
         for (int i = 0; i < n; i++) {
             buffer.writeBoolean(message.spawnFactionEnabled.length > i && message.spawnFactionEnabled[i]);
         }
+        buffer.writeLong(message.allSpawnIntervalTicks);
         for (int i = 0; i < n; i++) {
             buffer.writeLong(message.intervals.length > i ? message.intervals[i] : 0L);
             buffer.writeVarInt(message.amountMin.length > i ? message.amountMin[i] : 0);
@@ -212,6 +262,10 @@ public final class AdminSettingsMessage {
         int difficulty = buffer.readVarInt();
         boolean canEdit = buffer.readBoolean();
         double damage = buffer.readDouble();
+        double npcToPlayerDamage = buffer.readDouble();
+        double npcToMobDamage = buffer.readDouble();
+        double playerToNpcDamage = buffer.readDouble();
+        double mobToNpcDamage = buffer.readDouble();
         double fire = buffer.readDouble();
         double reaction = buffer.readDouble();
         double healthMultiplier = buffer.readDouble();
@@ -240,6 +294,12 @@ public final class AdminSettingsMessage {
         }
         boolean dropGuns = buffer.readBoolean();
         boolean dropAmmo = buffer.readBoolean();
+        boolean deathLootContainer = buffer.readBoolean();
+        boolean npcAmmoBoxDropEnabled = buffer.readBoolean();
+        boolean deathLootBarrelAutoRemove = buffer.readBoolean();
+        int deathLootBarrelLifetimeSeconds = buffer.readVarInt();
+        boolean visionOccludersEnabled = buffer.readBoolean();
+        boolean npcGlowEnabled = buffer.readBoolean();
         double ammoMultiplier = buffer.readDouble();
         int maxNpcs = buffer.readVarInt();
         int currentNpcs = buffer.readVarInt();
@@ -250,6 +310,7 @@ public final class AdminSettingsMessage {
             spawnFactionEnabled[i] = buffer.readBoolean();
         }
         long[] intervals = new long[n];
+        long allSpawnIntervalTicks = buffer.readLong();
         int[] mins = new int[n];
         int[] maxs = new int[n];
         boolean[] enabled = new boolean[n];
@@ -262,14 +323,20 @@ public final class AdminSettingsMessage {
             innerRadii[i] = buffer.readDouble();
             outerRadii[i] = buffer.readDouble();
         }
-        return new AdminSettingsMessage(difficulty, canEdit, damage, fire, reaction,
+        return new AdminSettingsMessage(difficulty, canEdit, damage,
+            npcToPlayerDamage, npcToMobDamage, playerToNpcDamage, mobToNpcDamage,
+            fire, reaction,
             healthMultiplier, movementSpeedMultiplier, soldierHostilePlayers, viewDistance,
             meleeDamageTaken, factionHealthMultipliers, factionDamageMultipliers,
             npcCullEnabled, npcCullDistance, chatNotifications, playerHeadshotBonus,
             spreadMultiplier, rangeMultiplier, factionRangeMultipliers, factionSpreadMultipliers,
-            dropGuns, dropAmmo, ammoMultiplier, maxNpcs, currentNpcs,
-            spawnEnabled, generatePrompt, spawnFactionEnabled, intervals, mins, maxs,
-            innerRadii, outerRadii);
+            dropGuns, dropAmmo, deathLootContainer, npcAmmoBoxDropEnabled,
+            deathLootBarrelAutoRemove, deathLootBarrelLifetimeSeconds,
+            visionOccludersEnabled, npcGlowEnabled,
+            ammoMultiplier,
+            maxNpcs, currentNpcs,
+            spawnEnabled, generatePrompt, spawnFactionEnabled, intervals,
+            allSpawnIntervalTicks, mins, maxs, innerRadii, outerRadii);
     }
 
     public void handle(Supplier<NetworkEvent.Context> supplier) {

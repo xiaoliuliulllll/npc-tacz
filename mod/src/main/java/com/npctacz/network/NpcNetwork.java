@@ -15,7 +15,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class NpcNetwork {
 
-    private static final String VERSION = "1";
+    private static final String VERSION = "9";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
         .named(new ResourceLocation(ModRegistry.MOD_ID, "main"))

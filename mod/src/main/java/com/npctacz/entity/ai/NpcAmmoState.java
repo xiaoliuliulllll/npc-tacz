@@ -75,6 +75,9 @@ public final class NpcAmmoState {
     private int recoilPauseTicks;
     private int successLogs;
     private int failureLogs;
+    /** 线性射击精度：1.0 初始，每枪按难度扣减，低于 0.4 加散布，0.2 以下短暂停火。 */
+    private float accuracy = 1.0F;
+    private int accuracyPauseTicks;
     private boolean cacheWarned;
 
     public NpcAmmoState(WastelandNpcEntity npc) {
@@ -94,6 +97,9 @@ public final class NpcAmmoState {
         if (this.recoilPauseTicks > 0) {
             this.recoilPauseTicks--;
         }
+        if (this.accuracyPauseTicks > 0 && --this.accuracyPauseTicks <= 0) {
+            this.accuracy = 1.0F;
+        }
         if (this.lastShotAge > 20) {
             this.sustainedShots = 0;
             this.recoilPhase = Math.max(0.0F, this.recoilPhase - 0.005F);
@@ -103,9 +109,12 @@ public final class NpcAmmoState {
                 "refill_seconds_melee", NpcConfig.VALUES.refillSecondsMelee.get())
             : com.npctacz.config.NpcGlobalConfig.getInt(
                 "refill_seconds_ranged", NpcConfig.VALUES.refillSecondsRanged.get())) * 20;
+        // 补弹间隔 /2；每次补弹量 x1.5；上限仍由 getMaxAmmo 控制。
+        refillTicks = Math.max(1, refillTicks / 2);
         if (++this.refillTimer >= refillTicks) {
             this.refillTimer = 0;
-            this.addReserve(this.npc.getRefillAmount());
+            int amount = Math.max(1, (int) Math.round(this.npc.getRefillAmount() * 1.5D));
+            this.addReserve(amount);
         }
 
         if (this.state == State.RELOADING) {
@@ -174,11 +183,23 @@ public final class NpcAmmoState {
     public boolean canShoot() {
         LivingEntity target = this.npc.getTarget();
         boolean close = target != null && this.npc.distanceToSqr(target) <= 16.0D * 16.0D;
+        boolean accuracyBlocked = this.accuracyPauseTicks > 0
+            && (target == null || this.npc.distanceToSqr(target) > 8.0D * 8.0D);
         return this.state == State.RANGED
             && this.magazine > 0
             && this.shotCooldown <= 0
             && (this.recoilPauseTicks <= 0 || close)
+            && !accuracyBlocked
             && hasGunInHand();
+    }
+
+    /** 当前线性精度（调试/界面用）。 */
+    public float accuracy() {
+        return this.accuracy;
+    }
+
+    public int accuracyPauseTicks() {
+        return this.accuracyPauseTicks;
     }
 
     /** 调试：直接设置弹匣数（0 时按当前备弹决定换弹还是切近战）。 */
@@ -294,6 +315,10 @@ public final class NpcAmmoState {
                 spread *= (float) com.npctacz.config.NpcGlobalConfig.getDouble(
                     "difficulty3_spread_multiplier", 0.8D);
             }
+            if (this.accuracy < 0.4F) {
+                // 低于 0.4 才增加散布；线性，不用抛物线。
+                spread *= 1.0F + Math.min(0.6F, (0.4F - this.accuracy) * 2.0F);
+            }
             float jitterYaw = baseYaw + (this.npc.getRandom().nextFloat() * 2.0F - 1.0F) * spread * 0.5F;
             float jitterPitch = Mth.clamp(
                 basePitch + (this.npc.getRandom().nextFloat() * 2.0F - 1.0F) * spread * 0.5F,
@@ -373,6 +398,7 @@ public final class NpcAmmoState {
                 if (com.npctacz.entity.ai.NpcGunRules.isSniper(gun.getGunId(stack))) {
                     this.shotCooldown += 12 + this.npc.getRandom().nextInt(13);
                 }
+                this.applyAccuracyDecay(target);
                 this.npc.startFiringAnimation();
                 if (this.successLogs < 3) {
                     this.successLogs++;
@@ -416,6 +442,26 @@ public final class NpcAmmoState {
      * 玩家由 TACZ 自己维护该缓存，NPC 不是玩家所以从来没人给它算过。
      * 这里调用官方 API 补齐：算一次配件/枪械属性缓存，否则永远打不出子弹。
      */
+    /**
+     * 线性精度衰减：难度越高每枪扣除越少。
+     * 难度 1 扣 0.05，难度 2 扣 0.04，难度 3 扣 0.03，难度 4 扣 0.02。
+     * 低于 0.2 时远距离目标停火 0.5~1 秒；8 格内继续射击。
+     */
+    private void applyAccuracyDecay(LivingEntity target) {
+        int difficulty = this.npc.getNpcDifficulty();
+        float decay = Math.max(0.01F, 0.05F - (difficulty - 1) * 0.01F);
+        this.accuracy = Math.max(0.0F, this.accuracy - decay);
+        if (this.accuracy <= 0.2F) {
+            boolean close = target != null && this.npc.distanceToSqr(target) <= 8.0D * 8.0D;
+            if (!close) {
+                this.accuracyPauseTicks = 10 + this.npc.getRandom().nextInt(11);
+                this.accuracy = 1.0F;
+            } else {
+                this.accuracy = 0.2F;
+            }
+        }
+    }
+
     private void ensureShootCache(IGunOperator operator) {
         if (operator.getCacheProperty() != null) {
             return;
@@ -496,7 +542,7 @@ public final class NpcAmmoState {
 
     // ------------------------------------------------------------------ 补弹与换弹
 
-    private void addReserve(int amount) {
+    public void addReserve(int amount) {
         if (amount <= 0) {
             return;
         }

@@ -125,6 +125,14 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
     @Nullable private BlockPos soundInterestPos;
     private long soundInterestUntilTick;
     private boolean lootDropped;
+    /** 死亡掉落暂存：开启死亡容器时，spawnAtLocation 不丢到地上。 */
+    private boolean capturingDeathLoot;
+    private final List<ItemStack> deathLootBuffer = new ArrayList<>();
+    /** 狙击枪本次死亡已掉落的子弹数，总上限 48。 */
+    private int sniperAmmoDropped;
+    /** 本次死亡是否把子弹收进钻石弹药盒。 */
+    private boolean collectingAmmoForBox;
+    private int collectedAmmoForBox;
     /** 9 格拾取背包：每格最多 64 个，死亡 100% 掉落。 */
     public static final int PICKUP_SLOTS = 9;
     public static final int PICKUP_STACK_SIZE = 64;
@@ -295,6 +303,15 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
     @Override
     public void tick() {
         super.tick();
+        // 全局 NPC 发光开关（默认关闭），每 20 tick 同步一次。
+        if (!this.level().isClientSide && this.tickCount % 20 == 0
+            && this.level() instanceof ServerLevel glowLevel) {
+            boolean glow = com.npctacz.data.NpcDifficultyData.get(glowLevel)
+                .isNpcGlowEnabled();
+            if (this.hasGlowingTag() != glow) {
+                this.setGlowingTag(glow);
+            }
+        }
         // 尸体清理：死亡后立刻停止 AI/寻路，到时限强制移除（原版 20 tick，可配置）
         if (!this.level().isClientSide && (this.isDeadOrDying() || this.getHealth() <= 0.0F)) {
             this.corpseTicks++;
@@ -472,6 +489,20 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
     }
 
     /** 死亡时 100% 掉落拾取背包。 */
+    @Override
+    public ItemEntity spawnAtLocation(ItemStack stack) {
+        return this.spawnAtLocation(stack, 0.0F);
+    }
+
+    @Override
+    public ItemEntity spawnAtLocation(ItemStack stack, float offsetY) {
+        if (this.capturingDeathLoot && stack != null && !stack.isEmpty()) {
+            this.deathLootBuffer.add(stack.copy());
+            return null;
+        }
+        return super.spawnAtLocation(stack, offsetY);
+    }
+
     private void dropPickupInventory() {
         for (int i = 0; i < PICKUP_SLOTS; i++) {
             ItemStack stack = this.pickupInventory.get(i);
@@ -913,18 +944,22 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
             return getFaction().isHostileTo(npc.getFaction());
         }
         if (other instanceof Enemy) {
-            return com.npctacz.config.NpcGlobalConfig.getBoolean("attack_hostile_mobs", false);
+            return com.npctacz.config.NpcGlobalConfig.getBoolean("attack_hostile_mobs", true);
         }
         return false;
     }
 
-    /** 记录当前目标是否还能看见；目标隔墙超过 20 tick 会由 NpcTargetGoal 丢弃。 */
-    public void noteTargetVisibility(boolean visible) {
+    /** 记录当前目标是否还能看见；参数是该次视线检查覆盖的 tick 数。 */
+    public void noteTargetVisibility(boolean visible, int elapsedTicks) {
         if (visible) {
             this.targetLosLostTicks = 0;
         } else {
-            this.targetLosLostTicks++;
+            this.targetLosLostTicks += Math.max(1, elapsedTicks);
         }
+    }
+
+    public void noteTargetVisibility(boolean visible) {
+        this.noteTargetVisibility(visible, 1);
     }
 
     public int getTargetLosLostTicks() {
@@ -1065,21 +1100,12 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
             if (attackerEntity instanceof LivingEntity attacker
                 && attacker != this
                 && this.canRetaliateAgainst(attacker)) {
-                // 先手敌人已经锁定时不换目标；目标死了/超时后新的攻击者才会接管
-                boolean keepFirst = this.retaliationTarget != null
-                    && this.retaliationTarget.isAlive()
-                    && this.retaliationTarget != attacker
-                    && this.retaliationTicks > 0;
-                boolean noticed = this.isTargetInFrontArc(attacker, 75.0F)
-                    || this.isLoudTarget(attacker) || isLoudAttack(source);
-                if (!keepFirst && noticed) {
-                    this.retaliationTarget = attacker;
-                    this.retaliationTicks = 400;
-                    this.setTarget(attacker);
-                }
-                if (noticed) {
-                    this.alertAllies(attacker);
-                }
+                // 被谁打就立刻转火谁；不再保留“first target”，
+                // 避免被近身攻击后还继续打远处原目标。
+                this.retaliationTarget = attacker;
+                this.retaliationTicks = 400;
+                this.setTarget(attacker);
+                this.alertAllies(attacker);
             }
         }
         return hurt;
@@ -1370,6 +1396,9 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
             }
             Set<Map.Entry<ResourceLocation, CommonAttachmentIndex>> all =
                 TimelessAPI.getAllCommonAttachmentIndex();
+            CommonGunIndex gunIndex = this.getGunIndex();
+            boolean sniperGun = gunIndex != null
+                && gunIndex.getType().toLowerCase(java.util.Locale.ROOT).contains("sniper");
             for (AttachmentType type : AttachmentType.values()) {
                 if (type == AttachmentType.NONE) {
                     continue;
@@ -1411,6 +1440,33 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
                 }
                 if (candidates.isEmpty()) {
                     continue;
+                }
+                if (type == AttachmentType.SCOPE && sniperGun) {
+                    // 狙击枪优先安装瞄准倍率最高的可用高倍镜。
+                    ItemStack best = null;
+                    float bestZoom = -1.0F;
+                    for (ItemStack candidate : candidates) {
+                        try {
+                            ItemStack test = gunStack.copy();
+                            gun.installAttachment(test, candidate);
+                            float zoom = gun.getAimingZoom(test);
+                            if (zoom > bestZoom) {
+                                bestZoom = zoom;
+                                best = candidate;
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    if (best != null) {
+                        try {
+                            gun.installAttachment(gunStack, best);
+                        } catch (Throwable ignored) {
+                        }
+                        if (!com.tacz.guns.api.DefaultAssets.isEmptyAttachmentId(
+                            gun.getAttachmentId(gunStack, type))) {
+                            continue;
+                        }
+                    }
                 }
                 java.util.Collections.shuffle(candidates, new java.util.Random(this.random.nextLong()));
                 // 逐个尝试，直到这个槽真的装上；100% 满配件目标
@@ -1593,14 +1649,125 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
             return;
         }
         this.lootDropped = true;
-        this.dropNpcLoot(source, looting, recentlyHit);
-        this.dropPickupInventory();
+        boolean container = false;
+        boolean ammoBoxDrop = false;
+        if (this.level() instanceof ServerLevel serverLevel) {
+            NpcDifficultyData data = NpcDifficultyData.get(serverLevel);
+            container = data.isDeathLootContainer();
+            ammoBoxDrop = data.isNpcAmmoBoxDropEnabled();
+        }
+        this.capturingDeathLoot = container;
+        this.deathLootBuffer.clear();
+        this.sniperAmmoDropped = 0;
+        this.collectingAmmoForBox = ammoBoxDrop;
+        this.collectedAmmoForBox = 0;
+        try {
+            // 额外子弹先掉；然后再掉原本设定的枪械/子弹/拾取物。
+            this.dropGuaranteedGunAmmo();
+            this.dropNpcLoot(source, looting, recentlyHit);
+            this.dropPickupInventory();
+            // 弹药盒作为掉落物生成：如果开启了死亡箱，spawnAtLocation 会把它收进桶。
+            this.dropCollectedAmmoBox();
+        } finally {
+            this.capturingDeathLoot = false;
+            this.collectingAmmoForBox = false;
+        }
+        if (container) {
+            this.flushDeathLootContainer();
+        }
+    }
+
+    /** 把死亡掉落放进一个桶；找不到位置就退回普通掉落。 */
+    private void flushDeathLootContainer() {
+        if (this.deathLootBuffer.isEmpty()) {
+            return;
+        }
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            this.dropDeathLootBufferNormally();
+            return;
+        }
+        BlockPos pos = this.findLootContainerPos(serverLevel);
+        if (pos == null) {
+            this.dropDeathLootBufferNormally();
+            return;
+        }
+        var barrelState = net.minecraft.world.level.block.Blocks.BARREL.defaultBlockState()
+            .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING,
+                net.minecraft.core.Direction.UP);
+        serverLevel.setBlock(pos, barrelState, 3);
+        var blockEntity = serverLevel.getBlockEntity(pos);
+        if (!(blockEntity instanceof net.minecraft.world.Container container)) {
+            this.dropDeathLootBufferNormally();
+            return;
+        }
+        if (blockEntity instanceof net.minecraft.world.level.block.entity.BarrelBlockEntity barrel) {
+            barrel.setCustomName(net.minecraft.network.chat.Component.literal("战利品桶"));
+        }
+        int slot = 0;
+        for (ItemStack stack : this.deathLootBuffer) {
+            if (stack.isEmpty()) {
+                continue;
+            }
+            while (slot < container.getContainerSize() && !container.getItem(slot).isEmpty()) {
+                slot++;
+            }
+            if (slot >= container.getContainerSize()) {
+                super.spawnAtLocation(stack);
+                continue;
+            }
+            container.setItem(slot, stack.copy());
+            slot++;
+        }
+        container.setChanged();
+        com.npctacz.data.NpcDifficultyData barrelSettings =
+            com.npctacz.data.NpcDifficultyData.get(serverLevel);
+        if (barrelSettings.isDeathLootBarrelAutoRemove()) {
+            long lifetimeTicks = barrelSettings.getDeathLootBarrelLifetimeSeconds() * 20L;
+            com.npctacz.data.DeathLootBarrelData.get(serverLevel).track(
+                serverLevel, pos, serverLevel.getGameTime() + lifetimeTicks);
+        }
+        this.deathLootBuffer.clear();
+    }
+
+    private BlockPos findLootContainerPos(ServerLevel level) {
+        BlockPos origin = this.blockPosition();
+        for (int dy = 0; dy <= 3; dy++) {
+            BlockPos pos = origin.above(dy);
+            var state = level.getBlockState(pos);
+            if (state.isAir() || state.canBeReplaced()) {
+                return pos;
+            }
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                BlockPos pos = origin.offset(dx, 0, dz);
+                var state = level.getBlockState(pos);
+                if (state.isAir() || state.canBeReplaced()) {
+                    return pos;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void dropDeathLootBufferNormally() {
+        for (ItemStack stack : this.deathLootBuffer) {
+            if (!stack.isEmpty()) {
+                super.spawnAtLocation(stack);
+            }
+        }
+        this.deathLootBuffer.clear();
     }
 
     /**
      * 同阵营增援：NPC 被攻击/死亡时，叫附近同阵营、且对攻击者敌对的单位来支援。
      * 有限半径、最多人数、冷却，避免一次交火把全图拉过来。
      */
+    /** 让附近同阵营单位来支援（压制/人海时用）。 */
+    public void callBackup(LivingEntity threat) {
+        this.alertAllies(threat);
+    }
+
     private void alertAllies(LivingEntity attacker) {
         if (this.level().isClientSide || attacker == null || attacker == this
             || !attacker.isAlive() || !this.isHostileTo(attacker)
@@ -1809,6 +1976,13 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
     }
 
     /** 管理员界面：是否允许掉子弹。 */
+    /** 击杀生物奖励的备弹（不产生掉落物）。 */
+    public void addKillRewardAmmo(int amount) {
+        if (amount > 0) {
+            this.ammoState.addReserve(amount);
+        }
+    }
+
     protected boolean shouldDropAmmo() {
         if (this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             return com.npctacz.data.NpcDifficultyData.get(serverLevel).isDropAmmo();
@@ -1843,6 +2017,103 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
         }
     }
 
+    /** 把本次收集的子弹装进一个钻石弹药盒，作为死亡掉落物/桶内物品。 */
+    private void dropCollectedAmmoBox() {
+        int total = this.collectedAmmoForBox;
+        this.collectedAmmoForBox = 0;
+        if (total <= 0 || this.ammoId == null) {
+            return;
+        }
+        Item boxItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation("tacz", "ammo_box"));
+        if (!(boxItem instanceof com.tacz.guns.api.item.IAmmoBox ammoBoxApi)) {
+            this.dropAmmoToGround(total);
+            return;
+        }
+        ItemStack box = new ItemStack(boxItem);
+        ammoBoxApi.setAmmoLevel(box, com.tacz.guns.item.AmmoBoxItem.DIAMOND_LEVEL);
+        ammoBoxApi.setAmmoId(box, this.ammoId);
+        ammoBoxApi.setAmmoCount(box, total);
+        this.spawnAtLocation(box);
+    }
+
+    private void dropAmmoToGround(int total) {
+        Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation("tacz", "ammo"));
+        if (item == null || this.ammoId == null) {
+            return;
+        }
+        int remaining = total;
+        while (remaining > 0) {
+            int stackSize = Math.min(64, remaining);
+            ItemStack stack = new ItemStack(item, stackSize);
+            stack.getOrCreateTag().putString("AmmoId", this.ammoId.toString());
+            this.spawnAtLocation(stack);
+            remaining -= stackSize;
+        }
+    }
+
+    private boolean isSniperGun() {
+        CommonGunIndex index = this.getGunIndex();
+        return index != null
+            && index.getType().toLowerCase(java.util.Locale.ROOT).contains("sniper");
+    }
+
+    /**
+     * 额外 100% 掉落：按枪械类型给一组对应弹药。
+     * 不受抢夺/管理员界面/弹药倍率影响；但关闭“子弹掉落”时不生成。
+     * 手枪 1 组、冲锋枪 2 组、霰弹枪 0.5 组、步枪 1.5~2.5 组随机、
+     * 狙击枪 0.4 组四舍五入、重型武器 0.5 组。
+     */
+    private void dropGuaranteedGunAmmo() {
+        if (this.ammoId == null || !this.shouldDropAmmo()) {
+            return;
+        }
+        CommonGunIndex index = this.getGunIndex();
+        String type = index == null ? "" : index.getType().toLowerCase(java.util.Locale.ROOT);
+        double groups;
+        if (type.contains("pistol")) {
+            groups = 1.0D;
+        } else if (type.contains("smg") || type.contains("submachine")) {
+            groups = 2.0D;
+        } else if (type.contains("shotgun")) {
+            groups = 0.5D;
+        } else if (type.contains("sniper")) {
+            groups = 0.4D;
+        } else if (type.contains("rifle") || type.contains("carbine") || type.contains("assault")) {
+            groups = 1.5D + this.random.nextDouble();
+        } else if (type.contains("heavy") || type.contains("machine") || type.contains("mg")
+            || type.contains("launcher") || type.contains("rpg") || type.contains("grenade")) {
+            groups = 0.5D;
+        } else {
+            groups = 1.0D;
+        }
+        int rounds = Math.max(1, (int) Math.round(groups * 64.0D));
+        if (this.isSniperGun()) {
+            // 狙击枪：额外掉落 + 普通掉落合计最多 48 发。
+            rounds = Math.min(rounds, Math.max(0, 48 - this.sniperAmmoDropped));
+        }
+        if (rounds <= 0) {
+            return;
+        }
+        if (this.collectingAmmoForBox) {
+            this.collectedAmmoForBox += rounds;
+            this.sniperAmmoDropped += rounds;
+            return;
+        }
+        Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation("tacz", "ammo"));
+        if (item == null) {
+            return;
+        }
+        int remaining = rounds;
+        while (remaining > 0) {
+            int stackSize = Math.min(64, remaining);
+            ItemStack stack = new ItemStack(item, stackSize);
+            stack.getOrCreateTag().putString("AmmoId", this.ammoId.toString());
+            this.spawnAtLocation(stack);
+            this.sniperAmmoDropped += stackSize;
+            remaining -= stackSize;
+        }
+    }
+
     protected void dropAmmo(int count) {
         if (!this.shouldDropAmmo()) {
             return;
@@ -1851,7 +2122,16 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
             double multiplier = com.npctacz.data.NpcDifficultyData.get(serverLevel).getAmmoDropMultiplier();
             count = Math.max(0, (int) Math.round(count * multiplier));
         }
+        if (this.isSniperGun()) {
+            // 狙击枪普通掉落也受 48 发总上限约束（额外掉落已经先掉）。
+            count = Math.min(count, Math.max(0, 48 - this.sniperAmmoDropped));
+        }
         if (count <= 0) {
+            return;
+        }
+        if (this.collectingAmmoForBox) {
+            this.collectedAmmoForBox += count;
+            this.sniperAmmoDropped += count;
             return;
         }
         Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation("tacz", "ammo"));
@@ -1864,6 +2144,7 @@ public abstract class WastelandNpcEntity extends PathfinderMob {
             ItemStack stack = new ItemStack(item, stackSize);
             stack.getOrCreateTag().putString("AmmoId", this.ammoId.toString());
             this.spawnAtLocation(stack);
+            this.sniperAmmoDropped += stackSize;
             remaining -= stackSize;
         }
     }

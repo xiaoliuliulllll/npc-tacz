@@ -87,7 +87,6 @@ public class BountyHunterNpc extends WastelandNpcEntity {
             followRange.setBaseValue(Math.max(32.0D, Math.min(64.0D, getAttackRange())));
         }
         this.deathsRemaining = 2 + (this.difficulty() - 1);
-        this.setGlowingTag(true);
         return data;
     }
 
@@ -202,7 +201,13 @@ public class BountyHunterNpc extends WastelandNpcEntity {
     @Override
     public boolean isHostileTo(LivingEntity other) {
         if (other == this || other == null || !other.isAlive()) return false;
-        // 赏金猎人对所有生物中立，只把玩家当目标
+        // 赏金猎人：敌对生物 > 玩家 > 其他 NPC。
+        if (other instanceof net.minecraft.world.entity.monster.Enemy) {
+            return true;
+        }
+        if (other instanceof WastelandNpcEntity npc) {
+            return npc != this && npc.getFaction() != getFaction();
+        }
         if (other instanceof Player player) {
             // 默认只追生存玩家，可用全局配置放开创造/旁观
             if (!this.allowsCreativePlayers() && player.isCreative()) {
@@ -225,7 +230,9 @@ public class BountyHunterNpc extends WastelandNpcEntity {
      */
     @Override
     public void setTarget(@javax.annotation.Nullable LivingEntity target) {
-        if (target != null && !(target instanceof Player)) {
+        if (target != null && !(target instanceof Player)
+            && !(target instanceof net.minecraft.world.entity.monster.Enemy)
+            && !(target instanceof WastelandNpcEntity)) {
             return;
         }
         if (target instanceof Player player) {
@@ -242,8 +249,7 @@ public class BountyHunterNpc extends WastelandNpcEntity {
         super.tick();
         if (this.level().isClientSide) return;
         if (this.tickCount % 20 == 0) {
-            this.setGlowingTag(true);
-            Player nearest = this.level().getNearestPlayer(this, getAwarenessRange());
+                Player nearest = this.level().getNearestPlayer(this, getAwarenessRange());
             if (nearest != null) {
                 this.trackedPlayer = nearest.getUUID();
             }

@@ -228,8 +228,8 @@ public class MercenaryNpc extends SoldierNpc {
         if (this.isOwner(other instanceof Player player ? player : null)) return false;
 
         if (!this.isHired()) {
-            // Before hiring: neutral to players/NPCs, but still fights hostile monsters.
-            return other instanceof Enemy;
+            // Before hiring: proactively fights monsters, players and other NPCs.
+            return other instanceof Enemy || other instanceof Player || other instanceof WastelandNpcEntity;
         }
 
         if (other instanceof Player player) {

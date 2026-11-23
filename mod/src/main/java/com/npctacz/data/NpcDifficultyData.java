@@ -21,12 +21,32 @@ public final class NpcDifficultyData extends SavedData {
     // ------------------------------------------------------------------ 管理员界面（Alt+Shift+N）
     /** 全局 NPC 伤害倍率（默认 1）。 */
     private double globalDamageMultiplier = 1.0D;
+    /** NPC 对玩家伤害倍率（默认 1）。 */
+    private double npcToPlayerDamageMultiplier = 1.0D;
+    /** NPC 对生物伤害倍率（非玩家，含 NPC；默认 1）。 */
+    private double npcToMobDamageMultiplier = 1.0D;
+    /** 玩家对 NPC 伤害倍率（默认 1）。 */
+    private double playerToNpcDamageMultiplier = 1.0D;
+    /** 生物对 NPC 伤害倍率（非玩家，含 NPC；默认 1）。 */
+    private double mobToNpcDamageMultiplier = 1.0D;
     /** 全局 NPC 射速倍率（默认 1）。 */
     private double globalFireRateMultiplier = 1.0D;
     /** NPC 死亡是否掉落枪械。 */
     private boolean dropGuns = true;
     /** NPC 死亡是否掉落子弹。 */
     private boolean dropAmmo = true;
+    /** NPC 死亡时是否把掉落物装进桶/箱子（默认关闭）。 */
+    private boolean deathLootContainer = false;
+    /** 玻璃、树叶等透明方块是否挡视线（默认关闭=默认透视）。 */
+    private boolean visionOccludersEnabled = false;
+    /** 全部 NPC 是否发光（默认关闭）。 */
+    private boolean npcGlowEnabled = false;
+    /** 自动战利品桶是否到时间消失（默认开启）。 */
+    private boolean deathLootBarrelAutoRemove = true;
+    /** 战利品桶存活时间（秒，默认 1200 = 20分钟）。 */
+    private int deathLootBarrelLifetimeSeconds = 1200;
+    /** NPC 死亡时是否把弹药装入钻石弹药盒给玩家（默认关闭）。 */
+    private boolean npcAmmoBoxDropEnabled = false;
     /** 掉落子弹数量倍率（默认 1）。 */
     private double ammoDropMultiplier = 1.0D;
     /** 自然生成总开关。 */
@@ -38,7 +58,7 @@ public final class NpcDifficultyData extends SavedData {
     /** 全局 NPC 移动速度倍率（默认 1；相对 0.09 基础速度）。 */
     private double globalMovementSpeedMultiplier = 1.0D;
     /** 士兵是否主动与玩家敌对（默认 false；玩家先动手时仍会反击）。 */
-    private boolean soldierHostilePlayers = false;
+    private boolean soldierHostilePlayers = true;
     /** NPC 受到近战伤害的全局倍率（默认 1.5）。 */
     private double meleeDamageTakenMultiplier = 1.5D;
     /** 每个阵营单独的生命倍率（默认 1）。 */
@@ -98,10 +118,31 @@ public final class NpcDifficultyData extends SavedData {
         // 管理员界面字段：老存档没有就用默认值
         data.globalDamageMultiplier = tag.contains("GlobalDamageMultiplier")
             ? Math.max(0.1D, Math.min(10.0D, tag.getDouble("GlobalDamageMultiplier"))) : 1.0D;
+        data.npcToPlayerDamageMultiplier = tag.contains("NpcToPlayerDamageMultiplier")
+            ? Math.max(0.1D, Math.min(10.0D, tag.getDouble("NpcToPlayerDamageMultiplier"))) : 1.0D;
+        data.npcToMobDamageMultiplier = tag.contains("NpcToMobDamageMultiplier")
+            ? Math.max(0.1D, Math.min(10.0D, tag.getDouble("NpcToMobDamageMultiplier"))) : 1.0D;
+        data.playerToNpcDamageMultiplier = tag.contains("PlayerToNpcDamageMultiplier")
+            ? Math.max(0.1D, Math.min(10.0D, tag.getDouble("PlayerToNpcDamageMultiplier"))) : 1.0D;
+        data.mobToNpcDamageMultiplier = tag.contains("MobToNpcDamageMultiplier")
+            ? Math.max(0.1D, Math.min(10.0D, tag.getDouble("MobToNpcDamageMultiplier"))) : 1.0D;
         data.globalFireRateMultiplier = tag.contains("GlobalFireRateMultiplier")
             ? Math.max(0.1D, Math.min(5.0D, tag.getDouble("GlobalFireRateMultiplier"))) : 1.0D;
         data.dropGuns = !tag.contains("DropGuns") || tag.getBoolean("DropGuns");
         data.dropAmmo = !tag.contains("DropAmmo") || tag.getBoolean("DropAmmo");
+        data.deathLootContainer = tag.getBoolean("DeathLootContainer");
+        // 旧存档没有迁移标记：默认改为“透视开启”（遮挡关闭）；之后以玩家开关为准。
+        if (!tag.contains("VisionOccludersMigrated")) {
+            data.visionOccludersEnabled = false;
+        } else {
+            data.visionOccludersEnabled = tag.getBoolean("VisionOccludersEnabled");
+        }
+        data.npcGlowEnabled = tag.getBoolean("NpcGlowEnabled");
+        data.deathLootBarrelAutoRemove = !tag.contains("DeathLootBarrelAutoRemove")
+            || tag.getBoolean("DeathLootBarrelAutoRemove");
+        data.deathLootBarrelLifetimeSeconds = tag.contains("DeathLootBarrelLifetimeSeconds")
+            ? Math.max(10, Math.min(86400, tag.getInt("DeathLootBarrelLifetimeSeconds"))) : 1200;
+        data.npcAmmoBoxDropEnabled = tag.getBoolean("NpcAmmoBoxDropEnabled");
         data.ammoDropMultiplier = tag.contains("AmmoDropMultiplier")
             ? Math.max(0.0D, Math.min(5.0D, tag.getDouble("AmmoDropMultiplier"))) : 1.0D;
         data.spawnEnabled = !tag.contains("SpawnEnabled") || tag.getBoolean("SpawnEnabled");
@@ -234,6 +275,42 @@ public final class NpcDifficultyData extends SavedData {
         this.setDirty();
     }
 
+    public double getNpcToPlayerDamageMultiplier() {
+        return this.npcToPlayerDamageMultiplier;
+    }
+
+    public void setNpcToPlayerDamageMultiplier(double value) {
+        this.npcToPlayerDamageMultiplier = Math.max(0.1D, Math.min(10.0D, value));
+        this.setDirty();
+    }
+
+    public double getNpcToMobDamageMultiplier() {
+        return this.npcToMobDamageMultiplier;
+    }
+
+    public void setNpcToMobDamageMultiplier(double value) {
+        this.npcToMobDamageMultiplier = Math.max(0.1D, Math.min(10.0D, value));
+        this.setDirty();
+    }
+
+    public double getPlayerToNpcDamageMultiplier() {
+        return this.playerToNpcDamageMultiplier;
+    }
+
+    public void setPlayerToNpcDamageMultiplier(double value) {
+        this.playerToNpcDamageMultiplier = Math.max(0.1D, Math.min(10.0D, value));
+        this.setDirty();
+    }
+
+    public double getMobToNpcDamageMultiplier() {
+        return this.mobToNpcDamageMultiplier;
+    }
+
+    public void setMobToNpcDamageMultiplier(double value) {
+        this.mobToNpcDamageMultiplier = Math.max(0.1D, Math.min(10.0D, value));
+        this.setDirty();
+    }
+
     public double getGlobalFireRateMultiplier() {
         return this.globalFireRateMultiplier;
     }
@@ -254,6 +331,60 @@ public final class NpcDifficultyData extends SavedData {
 
     public boolean isDropAmmo() {
         return this.dropAmmo;
+    }
+
+    public boolean isDeathLootContainer() {
+        return this.deathLootContainer;
+    }
+
+    public void setDeathLootContainer(boolean value) {
+        this.deathLootContainer = value;
+        this.setDirty();
+    }
+
+    public boolean isVisionOccludersEnabled() {
+        return this.visionOccludersEnabled;
+    }
+
+    public void setVisionOccludersEnabled(boolean value) {
+        this.visionOccludersEnabled = value;
+        this.setDirty();
+    }
+
+    public boolean isNpcGlowEnabled() {
+        return this.npcGlowEnabled;
+    }
+
+    public void setNpcGlowEnabled(boolean value) {
+        this.npcGlowEnabled = value;
+        this.setDirty();
+    }
+
+    public boolean isDeathLootBarrelAutoRemove() {
+        return this.deathLootBarrelAutoRemove;
+    }
+
+    public void setDeathLootBarrelAutoRemove(boolean value) {
+        this.deathLootBarrelAutoRemove = value;
+        this.setDirty();
+    }
+
+    public int getDeathLootBarrelLifetimeSeconds() {
+        return this.deathLootBarrelLifetimeSeconds;
+    }
+
+    public void setDeathLootBarrelLifetimeSeconds(int value) {
+        this.deathLootBarrelLifetimeSeconds = Math.max(10, Math.min(86400, value));
+        this.setDirty();
+    }
+
+    public boolean isNpcAmmoBoxDropEnabled() {
+        return this.npcAmmoBoxDropEnabled;
+    }
+
+    public void setNpcAmmoBoxDropEnabled(boolean value) {
+        this.npcAmmoBoxDropEnabled = value;
+        this.setDirty();
     }
 
     public void setDropAmmo(boolean value) {
@@ -525,9 +656,20 @@ public final class NpcDifficultyData extends SavedData {
         tag.putBoolean("GeneratePrompt", generatePrompt);
         tag.putInt("MaxNpcs", maxNpcs);
         tag.putDouble("GlobalDamageMultiplier", globalDamageMultiplier);
+        tag.putDouble("NpcToPlayerDamageMultiplier", npcToPlayerDamageMultiplier);
+        tag.putDouble("NpcToMobDamageMultiplier", npcToMobDamageMultiplier);
+        tag.putDouble("PlayerToNpcDamageMultiplier", playerToNpcDamageMultiplier);
+        tag.putDouble("MobToNpcDamageMultiplier", mobToNpcDamageMultiplier);
         tag.putDouble("GlobalFireRateMultiplier", globalFireRateMultiplier);
         tag.putBoolean("DropGuns", dropGuns);
         tag.putBoolean("DropAmmo", dropAmmo);
+        tag.putBoolean("DeathLootContainer", deathLootContainer);
+        tag.putBoolean("VisionOccludersEnabled", visionOccludersEnabled);
+        tag.putBoolean("VisionOccludersMigrated", true);
+        tag.putBoolean("NpcGlowEnabled", npcGlowEnabled);
+        tag.putBoolean("DeathLootBarrelAutoRemove", deathLootBarrelAutoRemove);
+        tag.putInt("DeathLootBarrelLifetimeSeconds", deathLootBarrelLifetimeSeconds);
+        tag.putBoolean("NpcAmmoBoxDropEnabled", npcAmmoBoxDropEnabled);
         tag.putDouble("AmmoDropMultiplier", ammoDropMultiplier);
         tag.putBoolean("SpawnEnabled", spawnEnabled);
         tag.putDouble("ReactionTimeMultiplier", reactionTimeMultiplier);

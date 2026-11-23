@@ -43,22 +43,22 @@ public final class NpcConfig {
             builder.comment("NPC 战斗设置 / NPC combat tuning").push("combat");
             this.reactionTicks = builder
                 .comment("看到目标后需要连续看到多少 tick 才开火 / ticks of LOS before opening fire")
-                .defineInRange("reactionTicks", 4, 0, 40);
+                .defineInRange("reactionTicks", 6, 0, 40);
             this.burstShots = builder
                 .comment("每个连射点射几发 / shots per burst")
                 .defineInRange("burstShots", 4, 1, 30);
             this.burstPauseTicks = builder
                 .comment("两轮点射之间停顿多久 / pause between bursts")
-                .defineInRange("burstPauseTicks", 8, 0, 100);
+                .defineInRange("burstPauseTicks", 30, 0, 100);
             this.continuousFireOnPlayers = builder
                 .comment("对玩家连续射击直到弹匣清空（不吃点射停顿）/ full-auto at players until magazine empty")
-                .define("continuousFireOnPlayers", true);
+                .define("continuousFireOnPlayers", false);
             this.hitKickStrength = builder
                 .comment("NPC 子弹命中玩家时视角抖动倍率（1=加强默认，0=关闭）/ camera kick multiplier when hit by NPC bullets")
                 .defineInRange("hitKickStrength", 1.0D, 0.0D, 5.0D);
             this.accuracyMultiplier = builder
                 .comment("散布倍率：越小越准 / spread multiplier, lower = more accurate")
-                .defineInRange("accuracyMultiplier", 1.0D, 0.1D, 5.0D);
+                .defineInRange("accuracyMultiplier", 0.75D, 0.1D, 5.0D);
             this.spreadDegrees = builder
                 .comment("基础散布角度（度）/ base aim spread in degrees")
                 .defineInRange("spreadDegrees", 1.5D, 0.0D, 15.0D);

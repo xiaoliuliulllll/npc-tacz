@@ -21,15 +21,28 @@ public class NpcTargetGoal extends TargetGoal {
 
     private final WastelandNpcEntity npc;
     private int scanCooldown;
+    private int groupScanCooldown;
+    @Nullable
+    private LivingEntity cachedGroupTarget;
 
     public NpcTargetGoal(WastelandNpcEntity npc) {
         super(npc, false);
         this.npc = npc;
         this.setFlags(EnumSet.of(Flag.TARGET));
+        // 错开不同 NPC 的第一次索敌，避免几十只同时扫描造成单 tick 卡顿。
+        int interval = Math.max(1, NpcConfig.VALUES.targetScanIntervalTicks.get());
+        this.scanCooldown = Math.floorMod(npc.getId() * 7, interval);
     }
 
     @Override
     public boolean canUse() {
+        if (this.groupScanCooldown > 0) {
+            this.groupScanCooldown--;
+        }
+        if (this.cachedGroupTarget != null
+            && (!this.cachedGroupTarget.isAlive() || !this.npc.isHostileTo(this.cachedGroupTarget))) {
+            this.cachedGroupTarget = null;
+        }
         // 先手反击目标：100% 优先，不参与扫描换目标
         LivingEntity forced = this.npc.getForcedTarget();
         if (forced != null) {
@@ -46,11 +59,18 @@ public class NpcTargetGoal extends TargetGoal {
         if (keepCurrentTarget()) {
             // 当前目标有效时仍定期检查是否有更高优先级目标（攻击者 > 敌对生物 > 玩家 > 敌对NPC）
             LivingEntity current = this.npc.getTarget();
-            if (current != null && this.npc.tickCount % 20 == 0) {
+            if (current != null && this.npc.tickCount % 40 == 0) {
                 LivingEntity better = NpcCombatHelper.scanForTarget(
                     this.npc, this.npc.getTargetScanRange());
-                if (better != null && better != current
-                    && NpcCombatHelper.targetPriority(better) < NpcCombatHelper.targetPriority(current)) {
+                boolean currentArmed = current instanceof net.minecraft.world.entity.player.Player currentPlayer
+                    && NpcCombatHelper.isArmedPlayer(currentPlayer);
+                boolean betterArmed = better instanceof net.minecraft.world.entity.player.Player betterPlayer
+                    && NpcCombatHelper.isArmedPlayer(betterPlayer);
+                boolean betterChoice = better != null && this.npc.isHostileTo(better)
+                    && (betterArmed && !currentArmed
+                        || (betterArmed == currentArmed
+                            && this.npc.distanceToSqr(better) + 16.0D < this.npc.distanceToSqr(current)));
+                if (betterChoice) {
                     this.npc.setTarget(better);
                     return true;
                 }
@@ -62,10 +82,11 @@ public class NpcTargetGoal extends TargetGoal {
         }
         this.scanCooldown = NpcConfig.VALUES.targetScanIntervalTicks.get();
         LivingEntity found = NpcCombatHelper.scanForTarget(this.npc, this.npc.getTargetScanRange());
+        boolean foundArmedPlayer = found instanceof net.minecraft.world.entity.player.Player foundPlayer
+            && NpcCombatHelper.isArmedPlayer(foundPlayer);
         LivingEntity groupTarget = groupTarget();
-        if (groupTarget != null && this.npc.isHostileTo(groupTarget)
-            && (found == null || NpcCombatHelper.targetPriority(groupTarget)
-                < NpcCombatHelper.targetPriority(found))) {
+        if (!foundArmedPlayer && groupTarget != null && this.npc.isHostileTo(groupTarget)
+            && (found == null || this.npc.distanceToSqr(groupTarget) < this.npc.distanceToSqr(found))) {
             found = groupTarget;
         }
         if (found == null) {
@@ -84,9 +105,12 @@ public class NpcTargetGoal extends TargetGoal {
     /** 当前目标还有效就继续用，不重新扫。 */
     private boolean keepCurrentTarget() {
         LivingEntity forced = this.npc.getForcedTarget();
-        if (forced != null && this.npc.getTarget() != forced) {
-            this.npc.setTarget(forced);
-            return true;
+        if (forced != null) {
+            // 正在反击时攻击者最高优先；武装玩家优先只用于普通索敌。
+            if (this.npc.getTarget() != forced) {
+                this.npc.setTarget(forced);
+                return true;
+            }
         }
         LivingEntity target = this.npc.getTarget();
         boolean forcedTarget = forced != null && target == forced;
@@ -102,10 +126,12 @@ public class NpcTargetGoal extends TargetGoal {
             this.npc.setTarget(null);
             return false;
         }
-        if (this.npc.tickCount % 10 == 0) {
+        if (this.npc.tickCount % 20 == 0) {
             boolean visible = NpcCombatHelper.canSee(this.npc, target);
-            this.npc.noteTargetVisibility(visible);
-            if (!visible && this.npc.getTargetLosLostTicks() >= 10) {
+            this.npc.noteTargetVisibility(visible, 20);
+            // 失去视线后保留记忆，给火力压制/等待/前压留出时间；
+            // 最长 21 秒仍无视线才真正丢目标（等待10秒+前压最长10秒）。
+            if (!visible && this.npc.getTargetLosLostTicks() >= 420) {
                 if (forcedTarget) {
                     this.npc.clearRetaliation();
                 }
@@ -118,10 +144,11 @@ public class NpcTargetGoal extends TargetGoal {
 
     @Nullable
     private LivingEntity groupTarget() {
-        NpcFaction faction = this.npc.getFaction();
-        if (faction != NpcFaction.SOLDIER && faction != NpcFaction.REBEL) {
-            return null;
+        if (this.groupScanCooldown > 0) {
+            return this.cachedGroupTarget;
         }
+        this.groupScanCooldown = 40 + (this.npc.getId() & 15);
+        NpcFaction faction = this.npc.getFaction();
         LivingEntity best = null;
         double bestDistance = Double.MAX_VALUE;
         for (WastelandNpcEntity ally : this.npc.level().getEntitiesOfClass(
@@ -139,6 +166,7 @@ public class NpcTargetGoal extends TargetGoal {
                 best = allyTarget;
             }
         }
+        this.cachedGroupTarget = best;
         return best;
     }
 

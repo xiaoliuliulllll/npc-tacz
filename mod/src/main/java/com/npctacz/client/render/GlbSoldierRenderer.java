@@ -37,7 +37,7 @@ import org.joml.Quaternionf;
 public class GlbSoldierRenderer extends EntityRenderer<WastelandNpcEntity> {
 
     /** 超过这个距离不渲染；308 只 NPC 同屏时这是最主要的省性能手段。 */
-    private static final double RENDER_DISTANCE_SQUARED = 40.0D * 40.0D;
+    private static final double RENDER_DISTANCE_SQUARED = 24.0D * 24.0D;
 
     private static final ResourceLocation FALLBACK_TEXTURE =
         new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
@@ -109,10 +109,10 @@ public class GlbSoldierRenderer extends EntityRenderer<WastelandNpcEntity> {
             this.fallback.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
             return;
         }
-        // Distance LOD: the custom GLB mesh is expensive. Beyond 24 blocks use
+        // Distance LOD: the custom GLB mesh is expensive. Beyond 12 blocks use
         // the cheap Steve fallback; the player still sees a soldier silhouette.
         net.minecraft.client.player.LocalPlayer local = Minecraft.getInstance().player;
-        if (local != null && entity.distanceToSqr(local) > 24.0D * 24.0D) {
+        if (local != null && entity.distanceToSqr(local) > 12.0D * 12.0D) {
             this.fallback.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
             return;
         }
